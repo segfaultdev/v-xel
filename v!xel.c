@@ -58,7 +58,13 @@ float fast_cos(float x) {
 }
 
 uint8_t get_world(int64_t x, int64_t y, int64_t z) {
-  if (x < 0 || y < 0 || z < 0 || x >= VX_SIZE_X || y >= VX_SIZE_Y || z >= VX_SIZE_Z) {
+  x %= VX_SIZE_X;
+  z %= VX_SIZE_Z;
+  
+  while (x < 0) x += VX_SIZE_X;
+  while (z < 0) z += VX_SIZE_Z;
+  
+  if (y < 0 || y >= VX_SIZE_Y) {
     return 0;
   }
   
@@ -86,13 +92,23 @@ Color get_color(int64_t x, int64_t y, int64_t z) {
     return (Color){255, 255, 0, 255};
   } else if (get_world(x, y, z) == 10) {
     return (Color){0, 0, 255, 255};
+  } else if (get_world(x, y, z) == 11) {
+    return (Color){79, 39, 7, 255};
+  } else if (get_world(x, y, z) == 12) {
+    return (Color){31, 111, 31, 255};
   }
   
   return BLACK;
 }
 
 void set_world(uint8_t value, int64_t x, int64_t y, int64_t z) {
-  if (x < 0 || y < 0 || z < 0 || x >= VX_SIZE_X || y >= VX_SIZE_Y || z >= VX_SIZE_Z) {
+  x %= VX_SIZE_X;
+  z %= VX_SIZE_Z;
+  
+  while (x < 0) x += VX_SIZE_X;
+  while (z < 0) z += VX_SIZE_Z;
+  
+  if (y < 0 || y >= VX_SIZE_Y) {
     return;
   }
   
@@ -102,9 +118,9 @@ void set_world(uint8_t value, int64_t x, int64_t y, int64_t z) {
 Color plot_pixel(float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, float dir_x, float dir_y, float dir_z, int limit) {
   if (!limit) return AIR_COLOR;
   
-  int64_t pos_x = cam_x;
-  int64_t pos_y = cam_y;
-  int64_t pos_z = cam_z;
+  int64_t pos_x = floorf(cam_x);
+  int64_t pos_y = floorf(cam_y);
+  int64_t pos_z = floorf(cam_z);
   
   float side_x = 0;
   float side_y = 0;
@@ -315,8 +331,6 @@ Color plot_pixel(float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, fl
             }
           }
           
-          // 0.005f
-          
           if (border_dist < (2.0f / VX_WIDTH) * dist) {
             border_dist = 0.75f;
           } else {
@@ -427,11 +441,11 @@ Color plot_pixel(float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, fl
   return AIR_COLOR;
 }  
 
-int seed_3a = 1;
-int seed_3b = 1;
-int seed_3c = 1;
+unsigned int seed_3a = 1;
+unsigned int seed_3b = 1;
+unsigned int seed_3c = 1;
 
-int rand_3() {
+unsigned int rand_3() {
   seed_3a = (seed_3a * 1664525 + 1013904223) % 1431655765;
   seed_3b = (seed_3b * 16843019 + 826366249) % 1431655765;
   seed_3c = (seed_3c * 16843031 + 826366237) % 1431655765;
@@ -439,7 +453,13 @@ int rand_3() {
   return seed_3a + seed_3b + seed_3c;
 }
 
-double grad_2(int x, int y) {
+float grad_2(int x, int y) {
+  x %= 8;
+  y %= 16;
+  
+  while (x < 0) x += 8;
+  while (y < 0) y += 16;
+  
   seed_3a = (x * 1664525 + 1013904223) % 1431655765;
   seed_3b = (y * 16843019 + 826366249) % 1431655765;
   seed_3c = ((seed_3a + seed_3b) * 16843031 + 826366237) % 1431655765;
@@ -450,40 +470,67 @@ double grad_2(int x, int y) {
     rand_3();
   }
   
-  return (rand_3() % 65537) / 65537.0;
+  return fast_abs(rand_3() % 65537) / 65537.0;
 }
 
-double lerp(double x, double y, double w) {
+float lerp(float x, float y, float w) {
   if (w < 0) return x;
   if (w > 1) return y;
   
-  // return (y - x) * w + x;
   return (y - x) * ((w * (w * 6.0 - 15.0) + 10.0) * w * w * w) + x;
 }
 
-double eval_2(double x, double y) {
+float eval_2(float x, float y) {
+  x = x - (int)(x / 8) * 8;
+  y = y - (int)(y / 8) * 16;
+  
+  while (x < 0) x += 8;
+  while (y < 0) y += 16;
+  
   x -= (y / 2);
   
-  double dx = x - floor(x);
-  double dy = y - floor(y);
+  float dx = x - floorf(x);
+  float dy = y - floorf(y);
   
   if (1 - dx < dy) {
-    double tmp = dx;
+    float tmp = dx;
     
     dx = 1 - dy;
     dy = 1 - tmp;
     
-    double s = ((dx - dy) + 1) / 2;
-    double h = dx + dy;
+    float s = ((dx - dy) + 1) / 2;
+    float h = dx + dy;
     
-    double t = lerp(grad_2(floor(x + 0), floor(y + 1)), grad_2(floor(x + 1), floor(y + 0)), s);
-    return lerp(grad_2(floor(x + 1), floor(y + 1)), t, h);
+    float t = lerp(grad_2(floorf(x + 0), floorf(y + 1)), grad_2(floorf(x + 1), floorf(y + 0)), s);
+    return lerp(grad_2(floorf(x + 1), floorf(y + 1)), t, h);
   } else {
-    double s = ((dx - dy) + 1) / 2;
-    double h = dx + dy;
+    float s = ((dx - dy) + 1) / 2;
+    float h = dx + dy;
     
-    double t = lerp(grad_2(floor(x + 0), floor(y + 1)), grad_2(floor(x + 1), floor(y + 0)), s);
-    return lerp(grad_2(floor(x + 0), floor(y + 0)), t, h);
+    float t = lerp(grad_2(floorf(x + 0), floorf(y + 1)), grad_2(floorf(x + 1), floorf(y + 0)), s);
+    return lerp(grad_2(floorf(x + 0), floorf(y + 0)), t, h);
+  }
+}
+
+void set_tree(int64_t x, int64_t y, int64_t z) {
+  int64_t length = 4 + (rand_3() % 3);
+  
+  for (int64_t i = 0; i < length; i++) {
+    set_world(11, x, y + i, z);
+  }
+  
+  for (int64_t i = -2; i <= 2; i++) {
+    for (int64_t j = -2; j <= 1; j++) {
+      for (int64_t k = -2; k <= 2; k++) {
+        if (i * i + j * j + k * k > 5) {
+          continue;
+        }
+        
+        if (!get_world(x + k, y + (length - 1) + j, z + i)) {
+          set_world(12, x + k, y + (length - 1) + j, z + i);
+        }
+      }
+    }
   }
 }
 
@@ -542,6 +589,14 @@ void handle_y(float old_y) {
   }
 }
 
+int diff_x(float x, float y, float z) {
+  return 4.0 * eval_2((y / 16.0 - x / 64.0), (z / 128.0) - 31.4);
+}
+
+int diff_z(float x, float y, float z) {
+  return 4.0 * eval_2((x / 128.0 - z / 64.0) + 15.9, y / 16.0);
+}
+
 int main(void) {
   InitWindow(VX_WIDTH * VX_ZOOM, VX_HEIGHT * VX_ZOOM, "v!xel test");
   srand(time(0));
@@ -550,23 +605,94 @@ int main(void) {
   
   for (int64_t i = 0; i < VX_SIZE_X; i++) {
     for (int64_t j = 0; j < VX_SIZE_Z; j++) {
-      double value_1 = eval_2(12.3 + j / 40.0, i / 40.0);
-      double value_2 = eval_2(45.6 + j / 100.0, i / 100.0);
-      double value_3 = eval_2(78.9 + j / 50.0, i / 50.0);
-      double value_4 = eval_2(01.2 + j / 60.0, i / 60.0);
+      float value_1 = (1.0 - fabs(1.0 - eval_2(12.3 + i / 16.0, j / 16.0) * 2.0));
+      float value_2 = roundf(eval_2(45.6 + j / 32.0, i / 32.0) * 8.0f) / 8.0f;
+      float value_3 = eval_2(78.9 + i / 64.0, j / 64.0);
+      float value_4 = eval_2(1.2 + j / 64.0, i / 64.0);
       
-      int64_t height = 32.0 + floor(abs(16.0 * value_4 + 16.0 * value_2 + 24.0 * value_3 * (1.0 - abs(1.0 - value_1 * 2.0))));
+      int64_t height = 32.0 + floorf(80.0f * lerp(0.1, 1.0, value_4) * lerp(value_1, value_2, value_3));
       
-      if (i == VX_SIZE_X / 2 && j == VX_SIZE_Z / 2) {
+      if (i == (int)(cam_x) % VX_SIZE_X && j == (int)(cam_z) % VX_SIZE_Z) {
         cam_y = height + 3.0f;
       }
       
-      set_world(1, i, height + 1, j);
-      
       for (int64_t k = 0; k <= height; k++) {
-        set_world(2, i, k, j);
+        set_world(2, i + diff_x(i, k, j), k, j + diff_z(i, k, j));
       }
     }
+    
+    printf("terrain: %.2f%% done\n", (i * 100.0f) / VX_SIZE_X);
+  }
+  
+  for (int64_t i = 0; i < VX_SIZE_Z; i++) {
+    for (int64_t j = 0; j < VX_SIZE_Y; j++) {
+      for (int64_t k = 0; k < VX_SIZE_X; k++) {
+        if (j < VX_SIZE_Y - 1) {
+          if (get_world(k, j, i) == 2 && get_world(k, j + 1, i) == 0) {
+            set_world(1, k, j, i);
+            continue;
+          }
+        }
+        
+        int total = 0;
+        int count = 0;
+        
+        for (int dz = -1; dz <= 1; dz++) {
+          for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+              int x = k + dx;
+              int y = j + dy;
+              int z = i + dz;
+              
+              if (y >= 0 && y < VX_SIZE_Y) {
+                total++;
+                
+                if (get_world(x, y, z)) {
+                  count++;
+                }
+              }
+            }
+          }
+        }
+        
+        if (count == total) {
+          set_world(7, k, j, i);
+        }
+      }
+    }
+    
+    printf("details: %.2f%% done\n", (i * 100.0f) / VX_SIZE_Z);
+  }
+  
+  int tree_count = VX_SIZE_X * VX_SIZE_Z * 0.35f * 0.015f;
+  
+  for (int i = 0; i < tree_count; i++) {
+    int64_t x = rand() % VX_SIZE_X;
+    int64_t z = rand() % VX_SIZE_Z;
+    
+    if (eval_2(14.1 + x / 20.0, 42.5 + z / 20.0) < 0.65f) {
+      i--;
+      continue;
+    }
+    
+    int64_t y = VX_SIZE_Y - 1;
+    
+    while (y >= 0 && !get_world(x, y - 1, z)) {
+      y--;
+    }
+    
+    if (y < 0) {
+      i--;
+      continue;
+    }
+    
+    if (get_world(x, y - 1, z) == 11 || get_world(x, y - 1, z) == 12) {
+      i--;
+      continue;
+    }
+    
+    set_tree(x, y, z);
+    printf("trees: %.2f%% done\n", (i * 100.0f) / tree_count);
   }
   
   Image screen = GenImageColor(VX_WIDTH, VX_HEIGHT, BLACK);
@@ -615,8 +741,8 @@ int main(void) {
     float old_z = cam_z;
     
     if (IsKeyDown(KEY_W)) {
-      cam_x += 10.00 * fast_sin(angle_lr) * GetFrameTime();
-      cam_z += 10.00 * fast_cos(angle_lr) * GetFrameTime();
+      cam_x += 30.00 * fast_sin(angle_lr) * GetFrameTime();
+      cam_z += 30.00 * fast_cos(angle_lr) * GetFrameTime();
       
       handle_xz(old_x, old_z);
     } else if (IsKeyDown(KEY_S)) {

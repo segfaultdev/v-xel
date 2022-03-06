@@ -741,8 +741,8 @@ int main(void) {
     float old_z = cam_z;
     
     if (IsKeyDown(KEY_W)) {
-      cam_x += 30.00 * fast_sin(angle_lr) * GetFrameTime();
-      cam_z += 30.00 * fast_cos(angle_lr) * GetFrameTime();
+      cam_x += 10.00 * fast_sin(angle_lr) * GetFrameTime();
+      cam_z += 10.00 * fast_cos(angle_lr) * GetFrameTime();
       
       handle_xz(old_x, old_z);
     } else if (IsKeyDown(KEY_S)) {

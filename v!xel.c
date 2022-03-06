@@ -1,9 +1,4 @@
-// #define STB_IMAGE_IMPLEMENTATION
-
 #include <stb_image.h>
-
-// #undef STB_IMAGE_IMPLEMENTATION
-
 #include <raylib.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -16,7 +11,7 @@
 #define VX_HEIGHT 162
 #define VX_ZOOM   5
 #define VX_SIZE_X (int64_t)(1024)
-#define VX_SIZE_Y (int64_t)(256)
+#define VX_SIZE_Y (int64_t)(128)
 #define VX_SIZE_Z (int64_t)(1024)
 #define VX_ITER   128
 #define VX_LIMIT  3
@@ -45,6 +40,9 @@ int sel_y = -1;
 int sel_z = -1;
 
 int sel_face = -1;
+
+int do_borders = 1;
+int do_shadows = 1;
 
 float fast_cos(float x) {
   float tp = 1 / (2 * PI);
@@ -203,132 +201,128 @@ Color plot_pixel(float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, fl
       
       float border_dist = 1.0f;
       
-      if (tile >= 8 && tile <= 10) {
-        if (hit_side == 0) {
-          if (get_world(pos_x, pos_y - 1, pos_z) != tile) {
-            border_dist = MIN(border_dist, hit_y - (int)(hit_y));
+      if (do_borders) {
+        if (1) {
+          if (hit_side == 0) {
+            if (get_world(pos_x, pos_y - 1, pos_z) != tile) {
+              border_dist = MIN(border_dist, hit_y - (int)(hit_y));
+            }
+            
+            if (get_world(pos_x, pos_y + 1, pos_z) != tile) {
+              border_dist = MIN(border_dist, 1.0f - (hit_y - (int)(hit_y)));
+            }
+            
+            if (get_world(pos_x, pos_y, pos_z - 1) != tile) {
+              border_dist = MIN(border_dist, hit_z - (int)(hit_z));
+            }
+            
+            if (get_world(pos_x, pos_y, pos_z + 1) != tile) {
+              border_dist = MIN(border_dist, 1.0f - (hit_z - (int)(hit_z)));
+            }
+            
+            if (get_world(pos_x - step_x, pos_y, pos_z) == tile) {
+              border_dist = 1.0f;
+            }
+          } else if (hit_side == 1) {
+            if (get_world(pos_x - 1, pos_y, pos_z) != tile) {
+              border_dist = MIN(border_dist, hit_x - (int)(hit_x));
+            }
+            
+            if (get_world(pos_x + 1, pos_y, pos_z) != tile) {
+              border_dist = MIN(border_dist, 1.0f - (hit_x - (int)(hit_x)));
+            }
+            
+            if (get_world(pos_x, pos_y, pos_z - 1) != tile) {
+              border_dist = MIN(border_dist, hit_z - (int)(hit_z));
+            }
+            
+            if (get_world(pos_x, pos_y, pos_z + 1) != tile) {
+              border_dist = MIN(border_dist, 1.0f - (hit_z - (int)(hit_z)));
+            }
+            
+            if (get_world(pos_x, pos_y - step_y, pos_z) == tile) {
+              border_dist = 1.0f;
+            }
+          } else if (hit_side == 2) {
+            if (get_world(pos_x - 1, pos_y, pos_z) != tile) {
+              border_dist = MIN(border_dist, hit_x - (int)(hit_x));
+            }
+            
+            if (get_world(pos_x + 1, pos_y, pos_z) != tile) {
+              border_dist = MIN(border_dist, 1.0f - (hit_x - (int)(hit_x)));
+            }
+            
+            if (get_world(pos_x, pos_y - 1, pos_z) != tile) {
+              border_dist = MIN(border_dist, hit_y - (int)(hit_y));
+            }
+            
+            if (get_world(pos_x, pos_y + 1, pos_z) != tile) {
+              border_dist = MIN(border_dist, 1.0f - (hit_y - (int)(hit_y)));
+            }
+            
+            if (get_world(pos_x, pos_y, pos_z - step_z) == tile) {
+              border_dist = 1.0f;
+            }
           }
           
-          if (get_world(pos_x, pos_y + 1, pos_z) != tile) {
-            border_dist = MIN(border_dist, 1.0f - (hit_y - (int)(hit_y)));
+          if (hit_side == 0) {
+            if (get_world(pos_x - step_x, pos_y - 1, pos_z)) {
+              border_dist = MIN(border_dist, hit_y - (int)(hit_y));
+            }
+            
+            if (get_world(pos_x - step_x, pos_y + 1, pos_z)) {
+              border_dist = MIN(border_dist, 1.0f - (hit_y - (int)(hit_y)));
+            }
+            
+            if (get_world(pos_x - step_x, pos_y, pos_z - 1)) {
+              border_dist = MIN(border_dist, hit_z - (int)(hit_z));
+            }
+            
+            if (get_world(pos_x - step_x, pos_y, pos_z + 1)) {
+              border_dist = MIN(border_dist, 1.0f - (hit_z - (int)(hit_z)));
+            }
+          } else if (hit_side == 1) {
+            if (get_world(pos_x - 1, pos_y - step_y, pos_z)) {
+              border_dist = MIN(border_dist, hit_x - (int)(hit_x));
+            }
+            
+            if (get_world(pos_x + 1, pos_y - step_y, pos_z)) {
+              border_dist = MIN(border_dist, 1.0f - (hit_x - (int)(hit_x)));
+            }
+            
+            if (get_world(pos_x, pos_y - step_y, pos_z - 1)) {
+              border_dist = MIN(border_dist, hit_z - (int)(hit_z));
+            }
+            
+            if (get_world(pos_x, pos_y - step_y, pos_z + 1)) {
+              border_dist = MIN(border_dist, 1.0f - (hit_z - (int)(hit_z)));
+            }
+          } else if (hit_side == 2) {
+            if (get_world(pos_x - 1, pos_y, pos_z - step_z)) {
+              border_dist = MIN(border_dist, hit_x - (int)(hit_x));
+            }
+            
+            if (get_world(pos_x + 1, pos_y, pos_z - step_z)) {
+              border_dist = MIN(border_dist, 1.0f - (hit_x - (int)(hit_x)));
+            }
+            
+            if (get_world(pos_x, pos_y - 1, pos_z - step_z)) {
+              border_dist = MIN(border_dist, hit_y - (int)(hit_y));
+            }
+            
+            if (get_world(pos_x, pos_y + 1, pos_z - step_z)) {
+              border_dist = MIN(border_dist, 1.0f - (hit_y - (int)(hit_y)));
+            }
           }
           
-          if (get_world(pos_x, pos_y, pos_z - 1) != tile) {
-            border_dist = MIN(border_dist, hit_z - (int)(hit_z));
-          }
+          // 0.005f
           
-          if (get_world(pos_x, pos_y, pos_z + 1) != tile) {
-            border_dist = MIN(border_dist, 1.0f - (hit_z - (int)(hit_z)));
-          }
-          
-          if (get_world(pos_x - step_x, pos_y, pos_z) == tile) {
+          if (border_dist < (2.0f / VX_WIDTH) * dist) {
+            border_dist = 0.75f;
+          } else {
             border_dist = 1.0f;
           }
-        } else if (hit_side == 1) {
-          if (get_world(pos_x - 1, pos_y, pos_z) != tile) {
-            border_dist = MIN(border_dist, hit_x - (int)(hit_x));
-          }
-          
-          if (get_world(pos_x + 1, pos_y, pos_z) != tile) {
-            border_dist = MIN(border_dist, 1.0f - (hit_x - (int)(hit_x)));
-          }
-          
-          if (get_world(pos_x, pos_y, pos_z - 1) != tile) {
-            border_dist = MIN(border_dist, hit_z - (int)(hit_z));
-          }
-          
-          if (get_world(pos_x, pos_y, pos_z + 1) != tile) {
-            border_dist = MIN(border_dist, 1.0f - (hit_z - (int)(hit_z)));
-          }
-          
-          if (get_world(pos_x, pos_y - step_y, pos_z) == tile) {
-            border_dist = 1.0f;
-          }
-        } else if (hit_side == 2) {
-          if (get_world(pos_x - 1, pos_y, pos_z) != tile) {
-            border_dist = MIN(border_dist, hit_x - (int)(hit_x));
-          }
-          
-          if (get_world(pos_x + 1, pos_y, pos_z) != tile) {
-            border_dist = MIN(border_dist, 1.0f - (hit_x - (int)(hit_x)));
-          }
-          
-          if (get_world(pos_x, pos_y - 1, pos_z) != tile) {
-            border_dist = MIN(border_dist, hit_y - (int)(hit_y));
-          }
-          
-          if (get_world(pos_x, pos_y + 1, pos_z) != tile) {
-            border_dist = MIN(border_dist, 1.0f - (hit_y - (int)(hit_y)));
-          }
-          
-          if (get_world(pos_x, pos_y, pos_z - step_z) == tile) {
-            border_dist = 1.0f;
-          }
         }
-        
-        if (border_dist < 0.05f) {
-          border_dist = 0.0f;
-        } else {
-          border_dist = 1.0f;
-        }
-      } else {
-        if (hit_side == 0) {
-          if (get_world(pos_x - step_x, pos_y - 1, pos_z)) {
-            border_dist = MIN(border_dist, hit_y - (int)(hit_y));
-          }
-          
-          if (get_world(pos_x - step_x, pos_y + 1, pos_z)) {
-            border_dist = MIN(border_dist, 1.0f - (hit_y - (int)(hit_y)));
-          }
-          
-          if (get_world(pos_x - step_x, pos_y, pos_z - 1)) {
-            border_dist = MIN(border_dist, hit_z - (int)(hit_z));
-          }
-          
-          if (get_world(pos_x - step_x, pos_y, pos_z + 1)) {
-            border_dist = MIN(border_dist, 1.0f - (hit_z - (int)(hit_z)));
-          }
-        } else if (hit_side == 1) {
-          if (get_world(pos_x - 1, pos_y - step_y, pos_z)) {
-            border_dist = MIN(border_dist, hit_x - (int)(hit_x));
-          }
-          
-          if (get_world(pos_x + 1, pos_y - step_y, pos_z)) {
-            border_dist = MIN(border_dist, 1.0f - (hit_x - (int)(hit_x)));
-          }
-          
-          if (get_world(pos_x, pos_y - step_y, pos_z - 1)) {
-            border_dist = MIN(border_dist, hit_z - (int)(hit_z));
-          }
-          
-          if (get_world(pos_x, pos_y - step_y, pos_z + 1)) {
-            border_dist = MIN(border_dist, 1.0f - (hit_z - (int)(hit_z)));
-          }
-        } else if (hit_side == 2) {
-          if (get_world(pos_x - 1, pos_y, pos_z - step_z)) {
-            border_dist = MIN(border_dist, hit_x - (int)(hit_x));
-          }
-          
-          if (get_world(pos_x + 1, pos_y, pos_z - step_z)) {
-            border_dist = MIN(border_dist, 1.0f - (hit_x - (int)(hit_x)));
-          }
-          
-          if (get_world(pos_x, pos_y - 1, pos_z - step_z)) {
-            border_dist = MIN(border_dist, hit_y - (int)(hit_y));
-          }
-          
-          if (get_world(pos_x, pos_y + 1, pos_z - step_z)) {
-            border_dist = MIN(border_dist, 1.0f - (hit_y - (int)(hit_y)));
-          }
-        }
-        
-        if (border_dist < 0.1f) {
-          border_dist *= 10.0f;
-        } else {
-          border_dist = 1.0f;
-        }
-        
-        border_dist = border_dist * 0.2f + 0.8f;
       }
       
       if (scr_x == GetMouseX() / VX_ZOOM && scr_y == GetMouseY() / VX_ZOOM) {
@@ -406,50 +400,18 @@ Color plot_pixel(float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, fl
         c.b *= border_dist;
       }
       
-      float ref_x = 0.0f;
-      float ref_y = 1.0f;
-      float ref_z = 0.0f;
+      float ref_x = 1.0f / sqrtf(3.0f);
+      float ref_y = 1.0f / sqrtf(3.0f);
+      float ref_z = 1.0f / sqrtf(3.0f);
       
-      if (tile == 1) {
-        float value = 0.0f;
+      if (do_shadows) {
+        Color top = plot_pixel(hit_x - dir_x * 0.001f, hit_y - dir_z * 0.001f, hit_z - dir_z * 0.001f, -1, -1, ref_x, ref_y, ref_z, MIN(limit - 1, 1));
         
-        value += fast_sin(hit_x * 47.02f + hit_z * 33.37f) * fast_sin(hit_x * 30.0f) * 6.0f;
-        value += fast_sin(hit_x * 31.11f - hit_z * 24.25f) * fast_sin(hit_y * 49.1f) * 5.0f;
-        value += fast_sin(hit_y * 55.89f - hit_x * 12.73f) * fast_sin(hit_z *  8.2f) * 4.0f;
-        
-        c.r = MAX(0, MIN(255, (int)(c.r) + value));
-        c.g = MAX(0, MIN(255, (int)(c.g) + value));
-        c.b = MAX(0, MIN(255, (int)(c.b) + value));
-      } else if (tile == 2 || tile == 7) {
-        float value = 0.0f;
-        
-        value += fast_sin(hit_x * 7.02f + hit_z * 15.37f) * fast_sin(hit_y * 30.0f) * 6.0f;
-        value += fast_sin(hit_x * 19.11f - hit_z * 3.25f) * fast_sin(hit_y * 49.1f) * 5.0f;
-        value += fast_sin(hit_y * 1.89f - hit_x * 8.73f)  * fast_sin(hit_z *  8.2f) * 4.0f;
-        
-        c.r = MAX(0, MIN(255, (int)(c.r) + value));
-        c.g = MAX(0, MIN(255, (int)(c.g) + value));
-        c.b = MAX(0, MIN(255, (int)(c.b) + value));
-      } else if (tile == 3) {
-        ref_x += fast_sin((hit_x + hit_y + hit_z - 0.17f * GetTime()) * 13.0f) * 0.02f;
-        ref_y += fast_sin((hit_x + hit_y - hit_z - 0.15f * GetTime()) * 15.0f) * 0.02f;
-        ref_z += fast_sin((hit_x - hit_y + hit_z + 0.13f * GetTime()) * 17.0f) * 0.02f;
-        
-        if (hit_side == 0) {
-          ref_x = 0.0f;
-        } else if (hit_side == 1) {
-          ref_y = 1.0f;
-        } else if (hit_side == 2) {
-          ref_z = 0.0f;
+        if (!(tile >= 8 && tile <= 10) && (memcmp(&top, &AIR_COLOR, sizeof(Color)) || (hit_side == 1 && step_y > 0))) {
+          c.r = c.r * 0.49f + top.r * 0.01f;
+          c.g = c.g * 0.49f + top.g * 0.01f;
+          c.b = c.b * 0.49f + top.b * 0.01f;
         }
-      }
-      
-      Color top = plot_pixel(hit_x - dir_x * 0.001f, hit_y - dir_z * 0.001f, hit_z - dir_z * 0.001f, -1, -1, ref_x, ref_y, ref_z, MIN(limit - 1, 1));
-      
-      if (!(tile >= 8 && tile <= 10) && (memcmp(&top, &AIR_COLOR, sizeof(Color)) || (hit_side == 1 && step_y > 0))) {
-        c.r = c.r * 0.4f + top.r * 0.1f;
-        c.g = c.g * 0.4f + top.g * 0.1f;
-        c.b = c.b * 0.4f + top.b * 0.1f;
       }
       
       if (sel_x == pos_x && sel_y == pos_y && sel_z == pos_z && sel_face == hit_side) {
@@ -463,6 +425,121 @@ Color plot_pixel(float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, fl
   }
   
   return AIR_COLOR;
+}  
+
+int seed_3a = 1;
+int seed_3b = 1;
+int seed_3c = 1;
+
+int rand_3() {
+  seed_3a = (seed_3a * 1664525 + 1013904223) % 1431655765;
+  seed_3b = (seed_3b * 16843019 + 826366249) % 1431655765;
+  seed_3c = (seed_3c * 16843031 + 826366237) % 1431655765;
+  
+  return seed_3a + seed_3b + seed_3c;
+}
+
+double grad_2(int x, int y) {
+  seed_3a = (x * 1664525 + 1013904223) % 1431655765;
+  seed_3b = (y * 16843019 + 826366249) % 1431655765;
+  seed_3c = ((seed_3a + seed_3b) * 16843031 + 826366237) % 1431655765;
+  
+  int count = rand_3() % 2;
+  
+  for (int i = 0; i < count; i++) {
+    rand_3();
+  }
+  
+  return (rand_3() % 65537) / 65537.0;
+}
+
+double lerp(double x, double y, double w) {
+  if (w < 0) return x;
+  if (w > 1) return y;
+  
+  // return (y - x) * w + x;
+  return (y - x) * ((w * (w * 6.0 - 15.0) + 10.0) * w * w * w) + x;
+}
+
+double eval_2(double x, double y) {
+  x -= (y / 2);
+  
+  double dx = x - floor(x);
+  double dy = y - floor(y);
+  
+  if (1 - dx < dy) {
+    double tmp = dx;
+    
+    dx = 1 - dy;
+    dy = 1 - tmp;
+    
+    double s = ((dx - dy) + 1) / 2;
+    double h = dx + dy;
+    
+    double t = lerp(grad_2(floor(x + 0), floor(y + 1)), grad_2(floor(x + 1), floor(y + 0)), s);
+    return lerp(grad_2(floor(x + 1), floor(y + 1)), t, h);
+  } else {
+    double s = ((dx - dy) + 1) / 2;
+    double h = dx + dy;
+    
+    double t = lerp(grad_2(floor(x + 0), floor(y + 1)), grad_2(floor(x + 1), floor(y + 0)), s);
+    return lerp(grad_2(floor(x + 0), floor(y + 0)), t, h);
+  }
+}
+
+void handle_xz(float old_x, float old_z) {
+  int tile_lo = get_world(cam_x, cam_y - 1.0f, cam_z);
+  int tile_hi = get_world(cam_x, cam_y + 0.0f, cam_z);
+  
+  if (tile_lo || tile_hi) {
+    if ((int)(cam_x) != (int)(old_x) && (int)(cam_z) == (int)(old_z)) {
+      cam_x = (cam_x > old_x) ? ((int)(cam_x) - 0.01f) : ((int)(old_x) + 0.01f);
+    } else if ((int)(cam_x) == (int)(old_x) && (int)(cam_z) != (int)(old_z)) {
+      cam_z = (cam_z > old_z) ? ((int)(cam_z) - 0.01f) : ((int)(old_z) + 0.01f);
+    } else if ((int)(cam_x) != (int)(old_x) && (int)(cam_z) != (int)(old_z)) {
+      
+      float col_x = fast_abs(old_x - ((cam_x > old_x) ? ((int)(cam_x) - 0.01f) : (int)(old_x) + 0.01f));
+      float col_z = fast_abs(old_z - ((cam_z > old_z) ? ((int)(cam_z) - 0.01f) : (int)(old_z) + 0.01f));
+      
+      if (col_x < col_z) {
+        cam_x = (cam_x > old_x) ? ((int)(cam_x) - 0.01f) : ((int)(old_x) + 0.01f);
+      } else {
+        cam_z = (cam_z > old_z) ? ((int)(cam_z) - 0.01f) : ((int)(old_z) + 0.01f);
+      }
+    }
+  }
+  
+  tile_lo = get_world(cam_x, cam_y - 1.0f, cam_z);
+  tile_hi = get_world(cam_x, cam_y + 0.0f, cam_z);
+  
+  if (tile_lo || tile_hi) {
+    if ((int)(cam_x) != (int)(old_x) && (int)(cam_z) == (int)(old_z)) {
+      cam_x = (cam_x > old_x) ? ((int)(cam_x) - 0.01f) : ((int)(old_x) + 0.01f);
+    } else if ((int)(cam_x) == (int)(old_x) && (int)(cam_z) != (int)(old_z)) {
+      cam_z = (cam_z > old_z) ? ((int)(cam_z) - 0.01f) : ((int)(old_z) + 0.01f);
+    } else if ((int)(cam_x) != (int)(old_x) && (int)(cam_z) != (int)(old_z)) {
+      
+      float col_x = fast_abs(old_x - ((cam_x > old_x) ? ((int)(cam_x) - 0.01f) : (int)(old_x) + 0.01f));
+      float col_z = fast_abs(old_z - ((cam_z > old_z) ? ((int)(cam_z) - 0.01f) : (int)(old_z) + 0.01f));
+      
+      if (col_x < col_z) {
+        cam_x = (cam_x > old_x) ? ((int)(cam_x) - 0.01f) : ((int)(old_x) + 0.01f);
+      } else {
+        cam_z = (cam_z > old_z) ? ((int)(cam_z) - 0.01f) : ((int)(old_z) + 0.01f);
+      }
+    }
+  }
+}
+
+void handle_y(float old_y) {
+  int tile_lo = get_world(cam_x, cam_y - 1.00f, cam_z);
+  int tile_hi = get_world(cam_x, cam_y + 0.50f, cam_z);
+  
+  if (tile_lo) {
+    cam_y = (int)(cam_y) + 1.00f;
+  } else if (tile_hi) {
+    cam_y = (int)(cam_y) + 0.49f;
+  }
 }
 
 int main(void) {
@@ -473,25 +550,34 @@ int main(void) {
   
   for (int64_t i = 0; i < VX_SIZE_X; i++) {
     for (int64_t j = 0; j < VX_SIZE_Z; j++) {
-      set_world(1, i, 1, j);
-      set_world(2, i, 0, j);
+      double value_1 = eval_2(12.3 + j / 40.0, i / 40.0);
+      double value_2 = eval_2(45.6 + j / 100.0, i / 100.0);
+      double value_3 = eval_2(78.9 + j / 50.0, i / 50.0);
+      double value_4 = eval_2(01.2 + j / 60.0, i / 60.0);
+      
+      int64_t height = 32.0 + floor(abs(16.0 * value_4 + 16.0 * value_2 + 24.0 * value_3 * (1.0 - abs(1.0 - value_1 * 2.0))));
+      
+      set_world(1, i, height + 1, j);
+      
+      for (int64_t k = 0; k <= height; k++) {
+        set_world(2, i, k, j);
+      }
     }
   }
   
+  Image screen = GenImageColor(VX_WIDTH, VX_HEIGHT, BLACK);
+  Texture texture = LoadTextureFromImage(screen);
+  
   while (!WindowShouldClose()) {
     BeginDrawing();
-    ClearBackground(BLACK);
-    
-    if (get_world((int64_t)(cam_x), (int64_t)(cam_y) - 1, (int64_t)(cam_z))) {
-      cam_y = (int64_t)(cam_y) + 1.0f;
-    }
+    ImageClearBackground(&screen, BLACK);
     
     float ratio_y = (float)(VX_HEIGHT) / VX_WIDTH;
     
     for (int64_t y = 0; y < VX_HEIGHT; y++) {
       for (int64_t x = 0; x < VX_WIDTH; x++) {
-        float scr_x = ((float)(x) / VX_WIDTH) * 2 - 1;
-        float scr_y = ((float)(y) / VX_HEIGHT) * 2 - 1;
+        float scr_x = (((float)(x) / VX_WIDTH) * 2 - 1) * 1.0f;
+        float scr_y = (((float)(y) / VX_HEIGHT) * 2 - 1) * 1.0f;
         
         float ray_x = scr_x;
         float ray_y = -scr_y * ratio_y;
@@ -512,17 +598,28 @@ int main(void) {
         Color color = plot_pixel(cam_x, cam_y, cam_z, x, y, dir_x, dir_y, dir_z, VX_LIMIT);
         
         if (memcmp(&color, &AIR_COLOR, sizeof(Color))) {
-          DrawRectangle(x * VX_ZOOM, y * VX_ZOOM, VX_ZOOM, VX_ZOOM, color);
+          ImageDrawPixel(&screen, x, y, color);
         }
       }
     }
     
+    UpdateTexture(texture, screen.data);
+    DrawTextureEx(texture, (Vector2){0, 0}, 0, VX_ZOOM, WHITE);
+    
+    float old_x = cam_x;
+    float old_y = cam_y;
+    float old_z = cam_z;
+    
     if (IsKeyDown(KEY_W)) {
-      cam_x += 5.00 * fast_sin(angle_lr) * GetFrameTime();
-      cam_z += 5.00 * fast_cos(angle_lr) * GetFrameTime();
+      cam_x += 10.00 * fast_sin(angle_lr) * GetFrameTime();
+      cam_z += 10.00 * fast_cos(angle_lr) * GetFrameTime();
+      
+      handle_xz(old_x, old_z);
     } else if (IsKeyDown(KEY_S)) {
-      cam_x -= 5.00 * fast_sin(angle_lr) * GetFrameTime();
-      cam_z -= 5.00 * fast_cos(angle_lr) * GetFrameTime();
+      cam_x -= 10.00 * fast_sin(angle_lr) * GetFrameTime();
+      cam_z -= 10.00 * fast_cos(angle_lr) * GetFrameTime();
+      
+      handle_xz(old_x, old_z);
     }
     
     if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)) {
@@ -539,8 +636,12 @@ int main(void) {
     
     if (IsKeyDown(KEY_SPACE)) {
       cam_y += 7.50 * GetFrameTime();
+      
+      handle_y(old_y);
     } else if (IsKeyDown(KEY_LEFT_SHIFT)) {
       cam_y -= 7.50 * GetFrameTime();
+      
+      handle_y(old_y);
     }
     
     if (IsKeyDown(KEY_ONE)) {

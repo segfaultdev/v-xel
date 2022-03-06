@@ -557,6 +557,10 @@ int main(void) {
       
       int64_t height = 32.0 + floor(abs(16.0 * value_4 + 16.0 * value_2 + 24.0 * value_3 * (1.0 - abs(1.0 - value_1 * 2.0))));
       
+      if (i == VX_SIZE_X / 2 && j == VX_SIZE_Z / 2) {
+        cam_y = height + 3.0f;
+      }
+      
       set_world(1, i, height + 1, j);
       
       for (int64_t k = 0; k <= height; k++) {

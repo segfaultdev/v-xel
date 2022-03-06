@@ -44,6 +44,8 @@ int sel_face = -1;
 int do_borders = 1;
 int do_shadows = 1;
 
+int seed = 0;
+
 float fast_cos(float x) {
   float tp = 1 / (2 * PI);
 
@@ -460,6 +462,9 @@ float grad_2(int x, int y) {
   while (x < 0) x += 8;
   while (y < 0) y += 16;
   
+  x +=  3 * seed;
+  y += 17 * seed;
+  
   seed_3a = (x * 1664525 + 1013904223) % 1431655765;
   seed_3b = (y * 16843019 + 826366249) % 1431655765;
   seed_3c = ((seed_3a + seed_3b) * 16843031 + 826366237) % 1431655765;
@@ -601,6 +606,7 @@ int main(void) {
   InitWindow(VX_WIDTH * VX_ZOOM, VX_HEIGHT * VX_ZOOM, "v!xel test");
   srand(time(0));
   
+  seed = rand() % 1048576;
   world = calloc(VX_SIZE_X * VX_SIZE_Y * VX_SIZE_Z, 1);
   
   for (int64_t i = 0; i < VX_SIZE_X; i++) {

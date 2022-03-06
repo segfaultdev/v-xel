@@ -30,6 +30,9 @@ float cam_x = VX_SIZE_X / 2;
 float cam_y = 4;
 float cam_z = VX_SIZE_Z / 2;
 
+float vel_y = 0;
+int on_ground = 0;
+
 float angle_lr = 0;
 float angle_ud = 0;
 
@@ -584,13 +587,19 @@ void handle_xz(float old_x, float old_z) {
 }
 
 void handle_y(float old_y) {
-  int tile_lo = get_world(cam_x, cam_y - 1.00f, cam_z);
-  int tile_hi = get_world(cam_x, cam_y + 0.50f, cam_z);
+  int tile_lo = get_world(cam_x, cam_y - 1.0f, cam_z);
+  int tile_hi = get_world(cam_x, cam_y + 0.5f, cam_z);
+  
+  on_ground = 0;
   
   if (tile_lo) {
-    cam_y = (int)(cam_y) + 1.00f;
+    cam_y = (int)(cam_y) + 1.0f;
+    if (vel_y < 0.0f) vel_y = 0.0f;
+    
+    on_ground = 1;
   } else if (tile_hi) {
     cam_y = (int)(cam_y) + 0.49f;
+    if (vel_y > 0.0f) vel_y = 0.0f;
   }
 }
 
@@ -770,6 +779,7 @@ int main(void) {
       angle_ud += 1.50 * GetFrameTime();
     }
     
+    /*
     if (IsKeyDown(KEY_SPACE)) {
       cam_y += 7.50 * GetFrameTime();
       
@@ -779,6 +789,24 @@ int main(void) {
       
       handle_y(old_y);
     }
+    */
+    
+    if (IsKeyPressed(KEY_SPACE) && on_ground) {
+      vel_y = 10.0f;
+    }
+    
+    vel_y -= 20.0f * GetFrameTime();
+    
+    if (vel_y < -20.0f) vel_y = -20.0f;
+    if (vel_y > 20.0f) vel_y = 20.0f;
+    
+    float delta_y = vel_y * GetFrameTime();
+    
+    if (delta_y <= -1.0f) delta_y = -0.99f;
+    if (delta_y >= 1.0f) delta_y = 0.99f;
+    
+    cam_y += delta_y;
+    handle_y(old_y);
     
     if (IsKeyDown(KEY_ONE)) {
       selected = 1;

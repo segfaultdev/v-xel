@@ -7,14 +7,15 @@
 #include <math.h>
 #include <time.h>
 
-#define VX_WIDTH  288
-#define VX_HEIGHT 162
-#define VX_ZOOM   5
-#define VX_SIZE_X (int64_t)(1024)
-#define VX_SIZE_Y (int64_t)(128)
-#define VX_SIZE_Z (int64_t)(1024)
-#define VX_ITER   128
-#define VX_LIMIT  3
+#define VX_WIDTH       288
+#define VX_HEIGHT      162
+#define VX_ZOOM        5
+#define VX_SIZE_X      (int64_t)(1024)
+#define VX_SIZE_Y      (int64_t)(128)
+#define VX_SIZE_Z      (int64_t)(1024)
+#define VX_ITER        384
+#define VX_SHADOW_ITER 384
+#define VX_LIMIT       3
 
 #define AIR_COLOR (Color){0, 0, 0, 144}
 
@@ -171,7 +172,9 @@ Color plot_pixel(float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, fl
     iter /= 3;
   }
   
-  for (int i = 0; i < iter; i++) {
+  int i;
+  
+  for (i = 0; i < iter; i++) {
     if (side_x <= side_y && side_x <= side_z) {
       side_x += delta_x;
       pos_x += step_x;
@@ -189,6 +192,7 @@ Color plot_pixel(float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, fl
       hit_side = 2;
     }
     
+    if (pos_y < 0 || pos_y >= VX_SIZE_Y) break;
     uint8_t tile = get_world(pos_x, pos_y, pos_z);
     
     if (tile) {
@@ -424,12 +428,18 @@ Color plot_pixel(float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, fl
       float ref_z = 1.0f / sqrtf(3.0f);
       
       if (do_shadows) {
-        Color top = plot_pixel(hit_x - dir_x * 0.001f, hit_y - dir_z * 0.001f, hit_z - dir_z * 0.001f, -1, -1, ref_x, ref_y, ref_z, MIN(limit - 1, 1));
-        
-        if (!(tile >= 8 && tile <= 10) && (memcmp(&top, &AIR_COLOR, sizeof(Color)) || (hit_side == 1 && step_y > 0))) {
-          c.r = c.r * 0.49f + top.r * 0.01f;
-          c.g = c.g * 0.49f + top.g * 0.01f;
-          c.b = c.b * 0.49f + top.b * 0.01f;
+        if (i < VX_SHADOW_ITER) {
+          Color top = plot_pixel(hit_x - dir_x * 0.001f, hit_y - dir_z * 0.001f, hit_z - dir_z * 0.001f, -1, -1, ref_x, ref_y, ref_z, MIN(limit - 1, 1));
+          
+          if (!(tile >= 8 && tile <= 10) && (memcmp(&top, &AIR_COLOR, sizeof(Color)) || (hit_side == 1 && step_y > 0))) {
+            c.r = c.r * 0.49f + top.r * 0.01f;
+            c.g = c.g * 0.49f + top.g * 0.01f;
+            c.b = c.b * 0.49f + top.b * 0.01f;
+          }
+        } else {
+          c.r = c.r * 0.5f;
+          c.g = c.g * 0.5f;
+          c.b = c.b * 0.5f;
         }
       }
       
@@ -456,6 +466,25 @@ unsigned int rand_3() {
   seed_3c = (seed_3c * 16843031 + 826366237) % 1431655765;
   
   return seed_3a + seed_3b + seed_3c;
+}
+
+float grad_1(int x) {
+  x %= 16;
+  while (x < 0) x += 16;
+  
+  x += 7 * seed;
+  
+  seed_3a = (x * 1664525 + 1013904223) % 1431655765;
+  seed_3b = (x * 16843019 + 826366249) % 1431655765;
+  seed_3c = ((seed_3a + seed_3b) * 16843031 + 826366237) % 1431655765;
+  
+  int count = rand_3() % 2;
+  
+  for (int i = 0; i < count; i++) {
+    rand_3();
+  }
+  
+  return fast_abs(rand_3() % 65537) / 65537.0;
 }
 
 float grad_2(int x, int y) {
@@ -486,6 +515,14 @@ float lerp(float x, float y, float w) {
   if (w > 1) return y;
   
   return (y - x) * ((w * (w * 6.0 - 15.0) + 10.0) * w * w * w) + x;
+}
+
+float eval_1(float x) {
+  x = x - (int)(x / 16) * 16;
+  while (x < 0) x += 16;
+  
+  float dx = x - floorf(x);
+  return lerp(grad_1(floorf(x + 0)), grad_1(floorf(x + 1)), dx);
 }
 
 float eval_2(float x, float y) {
@@ -603,12 +640,22 @@ void handle_y(float old_y) {
   }
 }
 
-int diff_x(float x, float y, float z) {
-  return 4.0 * eval_2((y / 16.0 - x / 64.0), (z / 128.0) - 31.4);
+int diff_x(float y) {
+  return 3.0f * eval_1(12.3f + y / 14.5f);
 }
 
-int diff_z(float x, float y, float z) {
-  return 4.0 * eval_2((x / 128.0 - z / 64.0) + 15.9, y / 16.0);
+int diff_z(float y) {
+  return 3.0f * eval_1(45.6f + y / 12.3f);
+}
+
+float lerp_3(float a, float b, float c, float w) {
+  float w1 = w * 2.0f;
+  float w2 = w1 - 1.0f;
+  
+  if (w1 > 1.0f) w1 = 1.0f;
+  if (w2 < 0.0f) w2 = 0.0f;
+  
+  return lerp(lerp(a, b, w1), c, w2);
 }
 
 int main(void) {
@@ -618,31 +665,39 @@ int main(void) {
   seed = rand() % 1048576;
   world = calloc(VX_SIZE_X * VX_SIZE_Y * VX_SIZE_Z, 1);
   
+  float max_magn = 0;
+  
   for (int64_t i = 0; i < VX_SIZE_X; i++) {
     for (int64_t j = 0; j < VX_SIZE_Z; j++) {
-      float value_1 = (1.0 - fabs(1.0 - eval_2(12.3 + i / 16.0, j / 16.0) * 2.0));
-      float value_2 = roundf(eval_2(45.6 + j / 32.0, i / 32.0) * 8.0f) / 8.0f;
-      float value_3 = eval_2(78.9 + i / 64.0, j / 64.0);
-      float value_4 = eval_2(1.2 + j / 64.0, i / 64.0);
+      float value_1 = eval_2(45.6f + j / 64.0f, i / 64.0f);
+      float value_2 = roundf(value_1 * 5.0f) / 5.0f;
+      float value_3 = eval_2(j / 32.0f + value_2 * 91.1f, i / 32.0f - value_2 * 33.6f);
+      float value_4 = 1.0f - fabs(1.0f - eval_2(78.9f + i / 16.0f, j / 16.0f) * 2.0f);
+      float value_5 = eval_2(i / 32.0f, j / 32.0f);
+      float value_6 = eval_2(j / 64.0f, i / 64.0f);
       
-      int64_t height = 32.0 + floorf(80.0f * lerp(0.1, 1.0, value_4) * lerp(value_1, value_2, value_3));
+      int64_t height = 32.0f + floorf(80.0f * value_6 * value_6 * lerp(value_3, value_4, value_5 * value_5));
       
       if (i == (int)(cam_x) % VX_SIZE_X && j == (int)(cam_z) % VX_SIZE_Z) {
         cam_y = height + 3.0f;
       }
       
+      float magn = 6.0f;
+      
       for (int64_t k = 0; k <= height; k++) {
-        set_world(2, i + diff_x(i, k, j), k, j + diff_z(i, k, j));
+        set_world(2, i + diff_x(k), k, j + diff_z(k));
       }
     }
     
     printf("terrain: %.2f%% done\n", (i * 100.0f) / VX_SIZE_X);
   }
   
+  printf("%.2f\n", max_magn);
+  
   for (int64_t i = 0; i < VX_SIZE_Z; i++) {
     for (int64_t j = 0; j < VX_SIZE_Y; j++) {
       for (int64_t k = 0; k < VX_SIZE_X; k++) {
-        if (j < VX_SIZE_Y - 1) {
+        if (j < 96) {
           if (get_world(k, j, i) == 2 && get_world(k, j + 1, i) == 0) {
             set_world(1, k, j, i);
             continue;
@@ -740,7 +795,7 @@ int main(void) {
         dir_y = ray_y;
         dir_z = ray_z * fast_cos(-angle_lr) + ray_x * fast_sin(-angle_lr);
         
-        Color color = plot_pixel(cam_x, cam_y, cam_z, x, y, dir_x, dir_y, dir_z, VX_LIMIT);
+        Color color = plot_pixel(cam_x, cam_y + 0.5f, cam_z, x, y, dir_x, dir_y, dir_z, VX_LIMIT);
         
         if (memcmp(&color, &AIR_COLOR, sizeof(Color))) {
           ImageDrawPixel(&screen, x, y, color);

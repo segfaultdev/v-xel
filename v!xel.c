@@ -7,9 +7,9 @@
 #include <math.h>
 #include <time.h>
 
-#define VX_WIDTH       288
-#define VX_HEIGHT      162
-#define VX_ZOOM        5
+#define VX_WIDTH       128 // 288
+#define VX_HEIGHT      64 // 162
+#define VX_ZOOM        10
 #define VX_SIZE_X      (int64_t)(1024)
 #define VX_SIZE_Y      (int64_t)(128)
 #define VX_SIZE_Z      (int64_t)(1024)
@@ -665,7 +665,13 @@ int main(void) {
   seed = rand() % 1048576;
   world = calloc(VX_SIZE_X * VX_SIZE_Y * VX_SIZE_Z, 1);
   
-  float max_magn = 0;
+  int diffs_x[VX_SIZE_Y];
+  int diffs_z[VX_SIZE_Y];
+  
+  for (int64_t i = 0; i < VX_SIZE_Y; i++) {
+    diffs_x[i] = diff_x(i);
+    diffs_z[i] = diff_z(i);
+  }
   
   for (int64_t i = 0; i < VX_SIZE_X; i++) {
     for (int64_t j = 0; j < VX_SIZE_Z; j++) {
@@ -682,17 +688,13 @@ int main(void) {
         cam_y = height + 3.0f;
       }
       
-      float magn = 6.0f;
-      
       for (int64_t k = 0; k <= height; k++) {
-        set_world(2, i + diff_x(k), k, j + diff_z(k));
+        set_world(2, i + diffs_x[k], k, j + diffs_z[k]);
       }
     }
     
     printf("terrain: %.2f%% done\n", (i * 100.0f) / VX_SIZE_X);
   }
-  
-  printf("%.2f\n", max_magn);
   
   for (int64_t i = 0; i < VX_SIZE_Z; i++) {
     for (int64_t j = 0; j < VX_SIZE_Y; j++) {
@@ -841,8 +843,6 @@ int main(void) {
       handle_y(old_y);
     } else if (IsKeyDown(KEY_LEFT_SHIFT)) {
       cam_y -= 7.50 * GetFrameTime();
-      
-      handle_y(old_y);
     }
     */
     

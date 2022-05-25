@@ -7,29 +7,17 @@
 #include <math.h>
 #include <time.h>
 
-#ifdef PLATFORM_WEB
-  int64_t VX_WIDTH = 128;
-  int64_t VX_HEIGHT = 64;
-  
-  int64_t VX_ZOOM = 12;
-  
-  #define VX_SIZE_X      (int64_t)(128)
-  #define VX_SIZE_Y      (int64_t)(128)
-  #define VX_SIZE_Z      (int64_t)(128)
-  #define VX_ITER        160
-  #define VX_SHADOW_ITER 160
-  #define VX_LIMIT       3
-#else
-  #define VX_WIDTH       256 // 512 // 288
-  #define VX_HEIGHT      144 // 288 // 162
-  #define VX_ZOOM        6
-  #define VX_SIZE_X      (int64_t)(128)
-  #define VX_SIZE_Y      (int64_t)(128)
-  #define VX_SIZE_Z      (int64_t)(128)
-  #define VX_ITER        512
-  #define VX_SHADOW_ITER 512
-  #define VX_LIMIT       3
-#endif
+int64_t VX_WIDTH = 128;
+int64_t VX_HEIGHT = 64;
+
+int64_t VX_ZOOM = 20;
+
+#define VX_SIZE_X      (int64_t)(256)
+#define VX_SIZE_Y      (int64_t)(128)
+#define VX_SIZE_Z      (int64_t)(256)
+#define VX_ITER        160
+#define VX_SHADOW_ITER 160
+#define VX_LIMIT       3
 
 #define AIR_COLOR (Color){127, 127, 255, 0}
 
@@ -448,6 +436,7 @@ Color plot_pixel(float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, fl
         
         sel_face = hit_side;
         
+        /*
         if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
           set_world(0, pos_x, pos_y, pos_z);
         } else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -459,6 +448,7 @@ Color plot_pixel(float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, fl
             set_world(selected, pos_x, pos_y, pos_z - step_z);
           }
         }
+        */
       }
       
       if (tile == 3) {
@@ -742,28 +732,6 @@ void set_tree(int64_t x, int64_t y, int64_t z) {
       }
     }
   }
-  
-  /*
-  int64_t length = 11 + (rand_3() % 3);
-  
-  for (int64_t i = 0; i < length; i++) {
-    set_world(11, x, y + i, z);
-  }
-  
-  for (int64_t i = -3; i <= 3; i++) {
-    for (int64_t j = 0; j <= 8; j++) {
-      for (int64_t k = -3; k <= 3; k++) {
-        if (j % 2 || i * i + k * k >= (3.5f - j / 3.0f) * (3.5f - j / 3.0f)) {
-          continue;
-        }
-        
-        if (!get_world(x + k, y + (length - 1) + j - 7, z + i)) {
-          set_world(12, x + k, y + (length - 1) + j - 7, z + i);
-        }
-      }
-    }
-  }
-  */
 }
 
 void handle_xz(float old_x, float old_z) {
@@ -848,18 +816,16 @@ float lerp_3(float a, float b, float c, float w) {
 int main(int argc, const char **argv) {
   for (int i = 1; i < argc; i++) {
     if (!strcmp(argv[i], "-w")) {
-      #ifdef PLATFORM_WEB
-        int64_t width = strtol(argv[++i], NULL, 0);
-        int64_t height = strtol(argv[++i], NULL, 0);
+      int64_t width = strtol(argv[++i], NULL, 0);
+      int64_t height = strtol(argv[++i], NULL, 0);
+      
+      for (;;) {
+        VX_WIDTH = (width + (VX_ZOOM - 1)) / VX_ZOOM;
+        VX_HEIGHT = (height + (VX_ZOOM - 1)) / VX_ZOOM;
         
-        for (;;) {
-          VX_WIDTH = (width + (VX_ZOOM - 1)) / VX_ZOOM;
-          VX_HEIGHT = (height + (VX_ZOOM - 1)) / VX_ZOOM;
-          
-          if (VX_WIDTH >= 160) break;
-          VX_ZOOM--;
-        }
-      #endif
+        if (VX_WIDTH >= 160) break;
+        VX_ZOOM--;
+      }
     }
   }
   
@@ -896,7 +862,8 @@ int main(int argc, const char **argv) {
       float value_5 = eval_2(i / 32.0f, j / 32.0f);
       float value_6 = eval_2(j / 64.0f, i / 64.0f);
       
-      int64_t height = 32.0f + floorf(80.0f * value_6 * value_6 * lerp(value_3, value_4, value_5 * value_5));
+      // int64_t height = 32.0f + floorf(80.0f * value_6 * value_6 * lerp(value_3, value_4, value_5 * value_5));
+      int64_t height = 32.0f + floorf(80.0f * value_6 * value_6 * value_3);
       
       if (i == (int)(cam_x) % VX_SIZE_X && j == (int)(cam_z) % VX_SIZE_Z) {
         cam_y = MAX(36, height) + 3.0f;
@@ -995,6 +962,12 @@ int main(int argc, const char **argv) {
   Image screen = GenImageColor(VX_WIDTH, VX_HEIGHT, BLACK);
   Texture texture = LoadTextureFromImage(screen);
   
+  Vector2 touch_start = (Vector2){0, 0};
+  int touching = 0;
+  
+  float touch_ud = 0.0f;
+  float touch_lr = 0.0f;
+  
   while (!WindowShouldClose()) {
     BeginDrawing();
     ImageClearBackground(&screen, (Color){AIR_COLOR.r, AIR_COLOR.g, AIR_COLOR.b, 255});
@@ -1034,9 +1007,77 @@ int main(int argc, const char **argv) {
     UpdateTexture(texture, screen.data);
     DrawTextureEx(texture, (Vector2){0, 0}, 0, VX_ZOOM, WHITE);
     
+    int ui_height = VX_HEIGHT / 2.8f;
+    
+    float stick_size = ((ui_height / 2.0f) - 4) * VX_ZOOM;
+    Vector2 stick_pos = (Vector2){(ui_height / 2.0f) * VX_ZOOM, ((VX_HEIGHT - ui_height) + ui_height / 2.0f) * VX_ZOOM};
+    
+    DrawRectangle(0, (VX_HEIGHT - ui_height) * VX_ZOOM, VX_WIDTH * VX_ZOOM, ui_height * VX_ZOOM, (Color){0, 0, 0, 63});
+    DrawCircle(stick_pos.x, stick_pos.y, stick_size, (Color){103, 103, 103, 255});
+    
+    Vector2 ball_pos = stick_pos;
+    
     float old_x = cam_x;
     float old_y = cam_y;
     float old_z = cam_z;
+    
+    int jump = 0;
+    
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+      Vector2 touch = GetTouchPosition(0);
+      
+      if (!touching) {
+        touch_start = touch;
+        
+        touch_ud = angle_ud;
+        touch_lr = angle_lr;
+      }
+      
+      if (touch_start.y < (VX_HEIGHT - ui_height) * VX_ZOOM) {
+        float move_x = (float)(touch.x - touch_start.x) / (float)(VX_WIDTH * VX_ZOOM);
+        float move_y = (float)(touch.y - touch_start.y) / (float)(VX_WIDTH * VX_ZOOM);
+        
+        angle_lr = touch_lr - move_x * 2.5f;
+        angle_ud = touch_ud - move_y * 2.5f;
+      } else if ((touch_start.x - stick_pos.x) * (touch_start.x - stick_pos.x) + (stick_pos.y - touch_start.y) * (stick_pos.y - touch_start.y) <=
+                 stick_size * stick_size) {
+        float move_x = (float)(touch.x - stick_pos.x) / (stick_size / 2.0f);
+        float move_y = (float)(stick_pos.y - touch.y) / (stick_size / 2.0f);
+        
+        float magn = sqrtf(move_x * move_x + move_y * move_y);
+        
+        if (magn > 0.0f) {
+          move_x /= magn;
+          move_y /= magn;
+        }
+        
+        if (magn > 1.0f) magn = 1.0f;
+        
+        ball_pos.x += move_x * magn * (stick_size / 2.0f);
+        ball_pos.y -= move_y * magn * (stick_size / 2.0f);
+        
+        move_x *= sqrtf(magn);
+        move_y *= sqrtf(magn);
+        
+        float add_x = move_x * fast_cos(-angle_lr) - move_y * fast_sin(-angle_lr);
+        float add_z = move_y * fast_cos(-angle_lr) + move_x * fast_sin(-angle_lr);
+        
+        cam_x += 10.0f * add_x * GetFrameTime();
+        cam_z += 10.0f * add_z * GetFrameTime();
+        
+        if (get_world(cam_x, cam_y - 1.0f, cam_z)) {
+          jump = 1;
+        }
+        
+        handle_xz(old_x, old_z);
+      }
+      
+      touching = 1;
+    } else {
+      touching = 0;
+    }
+    
+    DrawCircle(ball_pos.x, ball_pos.y, stick_size / 2.0f, (Color){207, 207, 207, 255});
     
     if (IsKeyDown(KEY_W)) {
       cam_x += 10.00 * fast_sin(angle_lr) * GetFrameTime();
@@ -1062,17 +1103,7 @@ int main(int argc, const char **argv) {
       angle_ud += 1.50 * GetFrameTime();
     }
     
-    /*
-    if (IsKeyDown(KEY_SPACE)) {
-      cam_y += 7.50 * GetFrameTime();
-      
-      handle_y(old_y);
-    } else if (IsKeyDown(KEY_LEFT_SHIFT)) {
-      cam_y -= 7.50 * GetFrameTime();
-    }
-    */
-    
-    if (IsKeyPressed(KEY_SPACE) && on_ground) {
+    if ((jump || IsKeyPressed(KEY_SPACE)) && on_ground) {
       vel_y = 10.0f;
     }
     
@@ -1132,6 +1163,21 @@ int main(int argc, const char **argv) {
     
     sprintf(buffer, "time: %.02f", daytime);
     DrawText(buffer, 10, 90, 20, WHITE);
+    
+    sprintf(buffer, "start_x: %.02f", touch_start.x);
+    DrawText(buffer, 10, 110, 20, WHITE);
+    
+    sprintf(buffer, "start_y: %.02f", touch_start.y);
+    DrawText(buffer, 10, 130, 20, WHITE);
+    
+    sprintf(buffer, "touch_x: %.02f", GetTouchPosition(0).x);
+    DrawText(buffer, 10, 150, 20, WHITE);
+    
+    sprintf(buffer, "touch_y: %.02f", GetTouchPosition(0).y);
+    DrawText(buffer, 10, 170, 20, WHITE);
+    
+    sprintf(buffer, "count: %d", GetTouchPointCount());
+    DrawText(buffer, 10, 190, 20, WHITE);
     
     daytime += GetFrameTime() / 1440.0f;
     while (daytime >= 1.0f) daytime -= 1.0f;

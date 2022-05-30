@@ -11,7 +11,7 @@
   int64_t VX_WIDTH = 128;
   int64_t VX_HEIGHT = 64;
   
-  int64_t VX_ZOOM = 12;
+  int64_t VX_ZOOM = 6;
   
   #define VX_SIZE_X      (int64_t)(128)
   #define VX_SIZE_Y      (int64_t)(128)

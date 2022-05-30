@@ -12,9 +12,9 @@ int64_t VX_HEIGHT = 64;
 
 int64_t VX_ZOOM = 20;
 
-#define VX_SIZE_X      (int64_t)(256)
+#define VX_SIZE_X      (int64_t)(96)
 #define VX_SIZE_Y      (int64_t)(128)
-#define VX_SIZE_Z      (int64_t)(256)
+#define VX_SIZE_Z      (int64_t)(96)
 #define VX_ITER        160
 #define VX_SHADOW_ITER 160
 #define VX_LIMIT       3
@@ -28,6 +28,16 @@ int64_t VX_ZOOM = 20;
 
 #define fast_sin(num) (fast_cos((num) + 1.5f * PI))
 #define fast_abs(num) ((num) < 0 ? -(num) : (num))
+
+typedef struct touch_t touch_t;
+
+struct touch_t {
+  Vector2 start, older, touch;
+  int id, down, first;
+};
+
+touch_t touches[16];
+int touch_count = 0;
 
 uint8_t *world = NULL;
 uint8_t *height_map = NULL;
@@ -58,6 +68,45 @@ int do_shadows = 1;
 int seed = 0;
 
 float daytime = 0.25f;
+
+void touch_start(void) {
+  for (int i = 0; i < touch_count; i++) {
+    touches[i].down = 0;
+  }
+}
+
+void touch_update(int id, Vector2 touch) {
+  for (int i = 0; i < touch_count; i++) {
+    if (touches[i].id == id) {
+      touches[i].older = touches[i].touch;
+      touches[i].touch = touch;
+      
+      touches[i].down = 1;
+      touches[i].first = 0;
+      
+      return;
+    }
+  }
+  
+  touches[touch_count++] = (touch_t){
+    .start = touch,
+    .older = touch,
+    .touch = touch,
+    
+    .id = id,
+    .down = 1,
+    .first = 1
+  };
+}
+
+void touch_end(void) {
+  for (int i = 0; i < touch_count; i++) {
+    if (!touches[i].down || (touches[i].touch.x <= 0 && touches[i].touch.y)) {
+      memmove(touches + i, touches + i + 1, (touch_count - 1) - i);
+      touch_count--, i--;
+    }
+  }
+}
 
 float fast_cos(float x) {
   float tp = 1 / (2 * PI);
@@ -962,11 +1011,13 @@ int main(int argc, const char **argv) {
   Image screen = GenImageColor(VX_WIDTH, VX_HEIGHT, BLACK);
   Texture texture = LoadTextureFromImage(screen);
   
-  Vector2 touch_start = (Vector2){0, 0};
-  int touching = 0;
-  
   float touch_ud = 0.0f;
   float touch_lr = 0.0f;
+  
+  int hold_count = 0;
+  int pray_count = 0;
+  
+  
   
   while (!WindowShouldClose()) {
     BeginDrawing();
@@ -1023,26 +1074,82 @@ int main(int argc, const char **argv) {
     
     int jump = 0;
     
-    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-      Vector2 touch = GetTouchPosition(0);
+    int ray_count = GetTouchPointCount();
+    
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || ray_count > pray_count) {
+      hold_count++;
+    } else if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) || ray_count < pray_count) {
+      hold_count--;
+    }
+    
+    /*
+    if (ray_count < hold_count) {
+      hold_count = ray_count;
+    }
+    */
+    
+    if (hold_count < 0) {
+      hold_count = 0;
+    }
+    
+    pray_count = ray_count;
+    
+    touch_start();
+    
+    if (hold_count) {
+      int count = 0;
       
-      if (!touching) {
-        touch_start = touch;
+      for (int i = 0; i < ray_count && count < hold_count; i++) {
+        Vector2 touch = GetTouchPosition(i);
+        if (touch.x <= 0 && touch.y <= 0) continue;
         
+        touch_update(GetTouchPointId(i), touch);
+        count++;
+      }
+    }
+    
+    touch_end();
+    
+    /*
+    for (int i = 0; i < touch_count; i++) {
+      if (!i) printf("seg touch points(%d):\n", touch_count);
+      printf("- %d, %d: (%.2f, %.2f) -> (%.2f, %.2f)\n", touches[i].id, touches[i].first, touches[i].start.x, touches[i].start.y, touches[i].touch.x, touches[i].touch.y);
+    }
+    
+    for (int i = 0; i < GetTouchPointCount(); i++) {
+      if (!i) printf("ray touch points(%d):\n", GetTouchPointCount());
+      printf("- %d: (%.2f, %.2f)\n", GetTouchPointId(i), GetTouchPosition(i).x, GetTouchPosition(i).y);
+    }
+    */
+    
+    for (int i = 0; i < touch_count; i++) {
+      touch_t curr = touches[i];
+      
+      if (curr.first) {
         touch_ud = angle_ud;
         touch_lr = angle_lr;
       }
       
-      if (touch_start.y < (VX_HEIGHT - ui_height) * VX_ZOOM) {
-        float move_x = (float)(touch.x - touch_start.x) / (float)(VX_WIDTH * VX_ZOOM);
-        float move_y = (float)(touch.y - touch_start.y) / (float)(VX_WIDTH * VX_ZOOM);
+      if (curr.start.y < (VX_HEIGHT - ui_height) * VX_ZOOM) {
+        float move_x = (float)(curr.touch.x - curr.start.x) / (float)(VX_WIDTH * VX_ZOOM);
+        float move_y = (float)(curr.touch.y - curr.start.y) / (float)(VX_WIDTH * VX_ZOOM);
         
-        angle_lr = touch_lr - move_x * 2.5f;
-        angle_ud = touch_ud - move_y * 2.5f;
-      } else if ((touch_start.x - stick_pos.x) * (touch_start.x - stick_pos.x) + (stick_pos.y - touch_start.y) * (stick_pos.y - touch_start.y) <=
+        float delta_x = (float)(curr.older.x - curr.touch.x) / (float)(VX_WIDTH * VX_ZOOM);
+        float delta_y = (float)(curr.older.y - curr.touch.y) / (float)(VX_WIDTH * VX_ZOOM);
+        
+        if (move_x * move_x + move_y * move_y > 0.02f * 0.02f) {
+          /*
+          angle_lr = touch_lr - move_x * 2.5f;
+          angle_ud = touch_ud - move_y * 2.5f;
+          */
+          
+          angle_lr += delta_x * 2.5f;
+          angle_ud += delta_y * 2.5f;
+        }
+      } else if ((curr.start.x - stick_pos.x) * (curr.start.x - stick_pos.x) + (stick_pos.y - curr.start.y) * (stick_pos.y - curr.start.y) <=
                  stick_size * stick_size) {
-        float move_x = (float)(touch.x - stick_pos.x) / (stick_size / 2.0f);
-        float move_y = (float)(stick_pos.y - touch.y) / (stick_size / 2.0f);
+        float move_x = (float)(curr.touch.x - stick_pos.x) / (stick_size / 2.0f);
+        float move_y = (float)(stick_pos.y - curr.touch.y) / (stick_size / 2.0f);
         
         float magn = sqrtf(move_x * move_x + move_y * move_y);
         
@@ -1070,11 +1177,9 @@ int main(int argc, const char **argv) {
         }
         
         handle_xz(old_x, old_z);
+      } else {
+        
       }
-      
-      touching = 1;
-    } else {
-      touching = 0;
     }
     
     DrawCircle(ball_pos.x, ball_pos.y, stick_size / 2.0f, (Color){207, 207, 207, 255});
@@ -1164,6 +1269,7 @@ int main(int argc, const char **argv) {
     sprintf(buffer, "time: %.02f", daytime);
     DrawText(buffer, 10, 90, 20, WHITE);
     
+    /*
     sprintf(buffer, "start_x: %.02f", touch_start.x);
     DrawText(buffer, 10, 110, 20, WHITE);
     
@@ -1175,9 +1281,16 @@ int main(int argc, const char **argv) {
     
     sprintf(buffer, "touch_y: %.02f", GetTouchPosition(0).y);
     DrawText(buffer, 10, 170, 20, WHITE);
+    */
     
-    sprintf(buffer, "count: %d", GetTouchPointCount());
-    DrawText(buffer, 10, 190, 20, WHITE);
+    sprintf(buffer, "seg: %d", touch_count);
+    DrawText(buffer, 10, 110, 20, WHITE);
+    
+    sprintf(buffer, "ray: %d", GetTouchPointCount());
+    DrawText(buffer, 10, 130, 20, WHITE);
+    
+    sprintf(buffer, "hold: %d", hold_count);
+    DrawText(buffer, 10, 150, 20, WHITE);
     
     daytime += GetFrameTime() / 1440.0f;
     while (daytime >= 1.0f) daytime -= 1.0f;

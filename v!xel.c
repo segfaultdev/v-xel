@@ -23,9 +23,9 @@
   #define VX_WIDTH       256 // 512 // 288
   #define VX_HEIGHT      144 // 288 // 162
   #define VX_ZOOM        6
-  #define VX_SIZE_X      (int64_t)(128)
+  #define VX_SIZE_X      (int64_t)(1024)
   #define VX_SIZE_Y      (int64_t)(128)
-  #define VX_SIZE_Z      (int64_t)(128)
+  #define VX_SIZE_Z      (int64_t)(1024)
   #define VX_ITER        512
   #define VX_SHADOW_ITER 512
   #define VX_LIMIT       3

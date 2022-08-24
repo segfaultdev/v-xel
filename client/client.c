@@ -7,9 +7,9 @@
 #include <math.h>
 #include <time.h>
 
-#define VX_WIDTH       192 // 288
-#define VX_HEIGHT      108 // 162
-#define VX_ZOOM        5
+#define VX_WIDTH       288
+#define VX_HEIGHT      162
+#define VX_ZOOM        4
 #define VX_ITER        256
 #define VX_SHADOW_ITER 256
 #define VX_LIMIT       3
@@ -35,6 +35,10 @@ vx_client_t vx_player = (vx_client_t){
   .pos_y = 16384.0f,
   .pos_z = 16384.0f,
 };
+
+float last_x = 0.0f;
+float last_y = 0.0f;
+float last_z = 0.0f;
 
 float vel_y = 0;
 int on_ground = 0;
@@ -798,7 +802,6 @@ Color plot_pixel(float *depth, float cam_x, float cam_y, float cam_z, int scr_x,
   if (g > 1.0f) g = 1.0f;
   if (b > 1.0f) b = 1.0f;
   
-  if (depth) *depth = -1.0f;
   return (Color){255 * r, 255 * g, 255 * b, alpha};
 }
 
@@ -893,7 +896,7 @@ int main(int argc, const char **argv) {
     
     for (uint32_t y = 0; y < VX_HEIGHT; y++) {
       for (uint32_t x = 0; x < VX_WIDTH; x++) {
-        screen_depths[x + y * VX_WIDTH] = 69420.0f;
+        screen_depths[x + y * VX_WIDTH] = 6942000.0f;
       }
     }
     
@@ -906,22 +909,22 @@ int main(int argc, const char **argv) {
       float dir_y;
       float dir_z;
       
-      dir_x = rel_x * fast_cos(-angle_lr) - rel_z * fast_sin(-angle_lr);
+      dir_x = rel_x * fast_cos(angle_lr) - rel_z * fast_sin(angle_lr);
       dir_y = rel_y;
-      dir_z = rel_z * fast_cos(-angle_lr) + rel_x * fast_sin(-angle_lr);
+      dir_z = rel_z * fast_cos(angle_lr) + rel_x * fast_sin(angle_lr);
       
       rel_x = dir_x;
       rel_y = dir_y;
       rel_z = dir_z;
       
       dir_x = rel_x;
-      dir_y = rel_y * fast_cos(-angle_ud) + rel_z * fast_sin(-angle_ud);
-      dir_z = rel_z * fast_cos(-angle_ud) - rel_y * fast_sin(-angle_ud);
+      dir_y = rel_y * fast_cos(angle_ud) + rel_z * fast_sin(angle_ud);
+      dir_z = rel_z * fast_cos(angle_ud) - rel_y * fast_sin(angle_ud);
       
       if (dir_z < 0.0f) continue;
       
-      dir_x /= 0.5f * dir_z;
-      dir_y /= 0.5f * dir_z;
+      dir_x /= dir_z;
+      dir_y /= dir_z;
       
       float scr_x = ((dir_x + 1.0f) / 2.0f) * VX_WIDTH;
       float scr_y = (((-dir_y / ratio_y) + 1.0f) / 2.0f) * VX_HEIGHT;
@@ -946,6 +949,7 @@ int main(int argc, const char **argv) {
       }
     }
     
+    #pragma omp parallel for
     for (uint32_t y = 0; y < VX_HEIGHT; y++) {
       for (uint32_t x = 0; x < VX_WIDTH; x++) {
         float scr_x = (((float)(x) / VX_WIDTH) * 2 - 1) * 1.0f;
@@ -972,7 +976,7 @@ int main(int argc, const char **argv) {
         Color color = plot_pixel(&depth, vx_player.pos_x, vx_player.pos_y + 0.5f, vx_player.pos_z, x, y, dir_x, dir_y, dir_z, VX_LIMIT);
         color.a = 255;
         
-        if (/* depth < screen_depths[x + y * VX_WIDTH] */ screen_depths[x + y * VX_WIDTH] == 69420.0f) {
+        if (depth < screen_depths[x + y * VX_WIDTH]) {
           ImageDrawPixel(&screen, x, y, color);
           screen_depths[x + y * VX_WIDTH] = depth;
         }
@@ -1086,6 +1090,14 @@ int main(int argc, const char **argv) {
     
     DrawFPS(10, 10);
     EndDrawing();
+    
+    if (fast_abs(last_x - vx_player.pos_x) + fast_abs(last_y - vx_player.pos_y) + fast_abs(last_z - vx_player.pos_z) >= 0.05f) {
+      vx_loader_update(vx_player.pos_x, vx_player.pos_y, vx_player.pos_z);
+    }
+    
+    last_x = vx_player.pos_x;
+    last_y = vx_player.pos_y;
+    last_z = vx_player.pos_z;
   }
   
   free(cloud_map);

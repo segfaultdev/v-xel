@@ -113,7 +113,7 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         response->type = vx_packet_bye;
         strcpy(response->bye, client->name);
         
-        msg_send(conn, msg_data);
+        msg_send(vx_clients[i].connection, msg_data);
         msg_delete_data(msg_data);
       }
     }

@@ -136,3 +136,19 @@ void vx_loader_place(uint8_t tile, uint32_t x, uint32_t y, uint32_t z) {
   msg_send(connection, msg_data);
   msg_delete_data(msg_data);
 }
+
+void vx_loader_update(float pos_x, float pos_y, float pos_z) {
+  msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_update));
+  vx_packet_t *packet = msg_data.bytes;
+  
+  packet->type = vx_packet_update;
+  
+  strcpy(packet->update.name, vx_name);
+  
+  packet->update.pos_x = pos_x;
+  packet->update.pos_y = pos_y;
+  packet->update.pos_z = pos_z;
+  
+  msg_send(connection, msg_data);
+  msg_delete_data(msg_data);
+}

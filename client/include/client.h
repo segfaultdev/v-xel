@@ -91,6 +91,7 @@ uint8_t vx_chunk_get(uint32_t x, uint32_t y, uint32_t z);
 
 void vx_loader_init(void);
 void vx_loader_place(uint8_t tile, uint32_t x, uint32_t y, uint32_t z);
+void vx_loader_update(float pos_x, float pos_y, float pos_z);
 
 void vx_client_add(const char *name);
 void vx_client_remove(const char *name);

@@ -880,6 +880,8 @@ int main(int argc, const char **argv) {
   Image screen = GenImageColor(VX_WIDTH, VX_HEIGHT, BLACK);
   Texture texture = LoadTextureFromImage(screen);
   
+  float *screen_depths = malloc(VX_WIDTH * VX_HEIGHT * sizeof(float)); // more cum
+  
   vx_chunk_init();
   vx_loader_init();
   
@@ -889,8 +891,55 @@ int main(int argc, const char **argv) {
     
     float ratio_y = (float)(VX_HEIGHT) / VX_WIDTH;
     
-    for (int64_t y = 0; y < VX_HEIGHT; y++) {
-      for (int64_t x = 0; x < VX_WIDTH; x++) {
+    for (uint32_t y = 0; y < VX_HEIGHT; y++) {
+      for (uint32_t x = 0; x < VX_WIDTH; x++) {
+        screen_depths[x + y * VX_WIDTH] = 69420.0f;
+      }
+    }
+    
+    for (int i = 0; i < vx_client_count; i++) {
+      float rel_x = vx_clients[i].pos_x - vx_player.pos_x;
+      float rel_y = -(vx_clients[i].pos_y - vx_player.pos_y);
+      float rel_z = vx_clients[i].pos_z - vx_player.pos_z;
+      
+      float dir_x = rel_x;
+      float dir_y = rel_y * fast_cos(-angle_ud) + rel_z * fast_sin(-angle_ud);
+      float dir_z = rel_z * fast_cos(-angle_ud) - rel_y * fast_sin(-angle_ud);
+      
+      rel_x = dir_x;
+      rel_y = dir_y;
+      rel_z = dir_z;
+      
+      dir_x = rel_x * fast_cos(-angle_lr) - rel_z * fast_sin(-angle_lr);
+      dir_y = rel_y;
+      dir_z = rel_z * fast_cos(-angle_lr) + rel_x * fast_sin(-angle_lr);
+      
+      printf("%.2f, %.2f, %.2f\n", dir_x, dir_y, dir_z);
+      
+      // dir_{x,y,z} -> coordinates player-relative uwu
+      
+      float start_x = ((dir_x - 0.5f) / dir_z) * (VX_WIDTH / 2.0f) + (VX_WIDTH / 2.0f);
+      float start_y = ((dir_y - 2.0f) / dir_z) * (VX_WIDTH / 2.0f) + (VX_HEIGHT / 2.0f);
+      
+      float end_x = ((dir_x + 0.5f) / dir_z) * (VX_WIDTH / 2.0f) + (VX_WIDTH / 2.0f);
+      float end_y = ((dir_y) / dir_z) * (VX_WIDTH / 2.0f) + (VX_HEIGHT / 2.0f);
+      
+      if (dir_z < 0.0f) continue;
+      
+      for (int j = (int)(start_y); j < (int)(end_y); j++) {
+        for (int k = (int)(start_x); k < (int)(end_x); k++) {
+          if (k < 0 || k >= VX_WIDTH || j < 0 || j >= VX_HEIGHT) continue; // TODO: get gud
+          
+          if (dir_z < screen_depths[k + j * VX_WIDTH]) {
+            ImageDrawPixel(&screen, k, j, MAGENTA);
+            screen_depths[k + j * VX_WIDTH] = dir_z;
+          }
+        }
+      }
+    }
+    
+    for (uint32_t y = 0; y < VX_HEIGHT; y++) {
+      for (uint32_t x = 0; x < VX_WIDTH; x++) {
         float scr_x = (((float)(x) / VX_WIDTH) * 2 - 1) * 1.0f;
         float scr_y = (((float)(y) / VX_HEIGHT) * 2 - 1) * 1.0f;
         
@@ -910,10 +959,15 @@ int main(int argc, const char **argv) {
         dir_y = ray_y;
         dir_z = ray_z * fast_cos(-angle_lr) + ray_x * fast_sin(-angle_lr);
         
-        Color color = plot_pixel(NULL, vx_player.pos_x, vx_player.pos_y + 0.5f, vx_player.pos_z, x, y, dir_x, dir_y, dir_z, VX_LIMIT);
+        float depth; // cum
+        
+        Color color = plot_pixel(&depth, vx_player.pos_x, vx_player.pos_y + 0.5f, vx_player.pos_z, x, y, dir_x, dir_y, dir_z, VX_LIMIT);
         color.a = 255;
         
-        ImageDrawPixel(&screen, x, y, color);
+        if (depth < screen_depths[x + y * VX_WIDTH]) {
+          ImageDrawPixel(&screen, x, y, color);
+          screen_depths[x + y * VX_WIDTH] = depth;
+        }
       }
     }
     

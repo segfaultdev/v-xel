@@ -9,11 +9,12 @@ size_t vx_packet_size(uint16_t type) {
     return (sizeof(uint16_t) + sizeof(vx_chunk_t));
   } else if (type == vx_packet_place) {
     return (sizeof(uint16_t) + 3 * sizeof(uint32_t) + sizeof(uint8_t));
-  } else if (type == vx_packet_welcome) {
+  } else if (type == vx_packet_welcome || type == vx_packet_bye) {
     return (sizeof(uint16_t) + 20 * sizeof(char));
   } else if (type == vx_packet_update) {
     return (sizeof(uint16_t) + 20 * sizeof(char) + 3 * sizeof(float));
   }
   
+  vx_fatal("me comes la polla @everyone\n");
   return 0;
 }

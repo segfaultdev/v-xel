@@ -116,7 +116,7 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         msg_delete_data(msg_data);
       }
     }
-  } else if (event == msg_connection_closed || event == msg_connection_lost) {
+  } else if (event == msg_connection_closed || event == msg_connection_lost || event == msg_error) {
     vx_client_t *client = vx_client_find(conn);
     
     if (client) {
@@ -136,8 +136,6 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         msg_delete_data(msg_data);
       }
     }
-  } else if (event == msg_error) {
-    vx_fatal("%s\n", msg_as_str(data));
   }
 }
 

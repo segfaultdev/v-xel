@@ -115,6 +115,7 @@ void vx_loader_init(const char *server_ip) {
 
 void vx_loader_place(uint8_t tile, uint32_t x, uint32_t y, uint32_t z) {
   if (y >= VX_CHUNK_Y) return;
+  if (!connection) return;
   
   uint32_t chunk_x = (x / VX_CHUNK_X);
   uint32_t chunk_z = (z / VX_CHUNK_Z);
@@ -143,6 +144,8 @@ void vx_loader_place(uint8_t tile, uint32_t x, uint32_t y, uint32_t z) {
 }
 
 void vx_loader_update(float pos_x, float pos_y, float pos_z) {
+  if (!connection) return;
+  
   msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_update));
   vx_packet_t *packet = msg_data.bytes;
   

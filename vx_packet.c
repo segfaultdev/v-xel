@@ -1,7 +1,6 @@
-#include <client.h>
+#include <protocol.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
 
 size_t vx_packet_size(uint16_t type) {
   if (type == vx_packet_request) {
@@ -14,8 +13,9 @@ size_t vx_packet_size(uint16_t type) {
     return (sizeof(uint16_t) + 20 * sizeof(char));
   } else if (type == vx_packet_update) {
     return (sizeof(uint16_t) + 20 * sizeof(char) + 3 * sizeof(float));
+  } else if (type == vx_packet_chat) {
+    return (sizeof(uint16_t) + sizeof(uint16_t));
   }
   
-  vx_fatal("me comes la polla @everyone\n");
   return 0;
 }

@@ -11,10 +11,8 @@
 #define VX_HEIGHT      162
 #define VX_ZOOM        4
 #define VX_ITER        256
-#define VX_SHADOW_ITER 256
+#define VX_SHADOW_ITER 768
 #define VX_LIMIT       3
-
-#define AIR_COLOR (Color){127, 127, 255, 0}
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
@@ -146,11 +144,11 @@ static float eval_2(float x, float y) {
   }
 }
 
-uint8_t get_world(int64_t x, int64_t y, int64_t z) {
+uint8_t get_world(uint32_t x, uint32_t y, uint32_t z) {
   return vx_chunk_get(x, y, z);
 }
 
-int is_solid(int64_t x, int64_t y, int64_t z) {
+int is_solid(uint32_t x, uint32_t y, uint32_t z) {
   int tile = get_world(x, y, z);
   return (tile != vx_tile_air && tile != vx_tile_water);
 }
@@ -177,7 +175,7 @@ Color get_color(int x, int y, int z) {
   return BLACK;
 }
 
-void set_world(uint8_t value, int64_t x, int64_t y, int64_t z) {
+void set_world(uint8_t value, uint32_t x, uint32_t y, uint32_t z) {
   vx_loader_place(value, x, y, z);
 }
 
@@ -200,9 +198,9 @@ float get_hue(float r, float g, float b) {
 }
 
 Color plot_shadow(float cam_x, float cam_y, float cam_z, float dir_x, float dir_y, float dir_z, int limit) {
-  int64_t pos_x = floorf(cam_x);
-  int64_t pos_y = floorf(cam_y);
-  int64_t pos_z = floorf(cam_z);
+  uint32_t pos_x = floorf(cam_x);
+  uint32_t pos_y = floorf(cam_y);
+  uint32_t pos_z = floorf(cam_z);
   
   float side_x = 0;
   float side_y = 0;
@@ -296,13 +294,32 @@ Color plot_shadow(float cam_x, float cam_y, float cam_z, float dir_x, float dir_
     }
   }
   
+  
+  float old_y = dir_y;
+  
+  if (dir_y < 0.000001f) dir_y = 0.000001f;
+  float ceil_w = (160.0f - cam_y) / dir_y;
+  
+  float ceil_x = fmodf((cam_x + dir_x * ceil_w) + daytime * VX_CLOUD_SIDE, VX_CLOUD_SIDE);
+  while (ceil_x < 0.0f) ceil_x += VX_CLOUD_SIDE;
+  
+  float ceil_z = fmodf((cam_z + dir_z * ceil_w) - daytime * VX_CLOUD_SIDE, VX_CLOUD_SIDE);
+  while (ceil_z < 0.0f) ceil_z += VX_CLOUD_SIDE;
+  
+  ceil_w = ((240.0f - cam_y) / dir_y) / 100.0f;
+  ceil_w = 32.0f / ceil_w;
+  
+  if (old_y >= 0.000001f && cloud_map[(int)(ceil_x) + (int)(ceil_z) * VX_CLOUD_SIDE]) {
+    return (Color){191, 191, 191, 255};
+  }
+  
   return (Color){255, 255, 255, 255};
 }
 
 Color plot_pixel(float *depth, float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, float dir_x, float dir_y, float dir_z, int limit) {
-  int64_t pos_x = floorf(cam_x);
-  int64_t pos_y = floorf(cam_y);
-  int64_t pos_z = floorf(cam_z);
+  uint32_t pos_x = floorf(cam_x);
+  uint32_t pos_y = floorf(cam_y);
+  uint32_t pos_z = floorf(cam_z);
   
   float side_x = 0;
   float side_y = 0;
@@ -688,22 +705,11 @@ Color plot_pixel(float *depth, float cam_x, float cam_y, float cam_z, int scr_x,
         }
         
         c = (Color){(c.r + new_color.r) / 2, (c.g + new_color.g) / 2, (c.b + new_color.b) / 2, 255};
-      } else if (tile >= 8 && tile <= 10) {
-        mask = (Color){((float)(c.r) * (float)(mask.r)) / 255.0f, ((float)(c.g) * (float)(mask.g)) / 255.0f, ((float)(c.b) * (float)(mask.b)) / 255.0f, mask.a};
-        continue;
       }
       
-      if (tile >= 8 && tile <= 10) {
-        Color org = get_color(pos_x, pos_y, pos_z);
-        
-        c.r = c.r * border_dist + ((org.r + 255) / 2) * (1.0f - border_dist);
-        c.g = c.g * border_dist + ((org.g + 255) / 2) * (1.0f - border_dist);
-        c.b = c.b * border_dist + ((org.b + 255) / 2) * (1.0f - border_dist);
-      } else {
-        c.r *= border_dist;
-        c.g *= border_dist;
-        c.b *= border_dist;
-      }
+      c.r *= border_dist;
+      c.g *= border_dist;
+      c.b *= border_dist;
       
       float ref_x = fast_cos(2 * PI * daytime);
       float ref_y = fast_sin(2 * PI * daytime);
@@ -874,8 +880,8 @@ int main(int argc, const char **argv) {
   
   cloud_map = calloc(VX_CLOUD_SIDE * VX_CLOUD_SIDE, 1);
   
-  for (int64_t i = 0; i < VX_CLOUD_SIDE; i++) {
-    for (int64_t j = 0; j < VX_CLOUD_SIDE; j++) {
+  for (uint32_t i = 0; i < VX_CLOUD_SIDE; i++) {
+    for (uint32_t j = 0; j < VX_CLOUD_SIDE; j++) {
       if (eval_2((int)(j / 8) / 4.0f + 11.2f, (int)(i / 8) / 4.0f + 6.5f) < 0.3f) cloud_map[i + j * VX_CLOUD_SIDE] = 1;
     }
   }
@@ -890,62 +896,13 @@ int main(int argc, const char **argv) {
   
   while (!WindowShouldClose()) {
     BeginDrawing();
-    ImageClearBackground(&screen, (Color){AIR_COLOR.r, AIR_COLOR.g, AIR_COLOR.b, 255});
+    ImageClearBackground(&screen, BLACK);
     
     float ratio_y = (float)(VX_HEIGHT) / VX_WIDTH;
     
     for (uint32_t y = 0; y < VX_HEIGHT; y++) {
       for (uint32_t x = 0; x < VX_WIDTH; x++) {
         screen_depths[x + y * VX_WIDTH] = 6942000.0f;
-      }
-    }
-    
-    for (int i = 0; i < vx_client_count; i++) {
-      float rel_x = vx_clients[i].pos_x - vx_player.pos_x;
-      float rel_y = vx_clients[i].pos_y - vx_player.pos_y;
-      float rel_z = vx_clients[i].pos_z - vx_player.pos_z;
-      
-      float dir_x;
-      float dir_y;
-      float dir_z;
-      
-      dir_x = rel_x * fast_cos(angle_lr) - rel_z * fast_sin(angle_lr);
-      dir_y = rel_y;
-      dir_z = rel_z * fast_cos(angle_lr) + rel_x * fast_sin(angle_lr);
-      
-      rel_x = dir_x;
-      rel_y = dir_y;
-      rel_z = dir_z;
-      
-      dir_x = rel_x;
-      dir_y = rel_y * fast_cos(angle_ud) + rel_z * fast_sin(angle_ud);
-      dir_z = rel_z * fast_cos(angle_ud) - rel_y * fast_sin(angle_ud);
-      
-      if (dir_z < 0.0f) continue;
-      
-      dir_x /= dir_z;
-      dir_y /= dir_z;
-      
-      float scr_x = ((dir_x + 1.0f) / 2.0f) * VX_WIDTH;
-      float scr_y = (((-dir_y / ratio_y) + 1.0f) / 2.0f) * VX_HEIGHT;
-      
-      printf("%.2f, %.2f, %.2f -~-_-> %.2f %.2f uwu\n", dir_x, dir_y, dir_z, scr_x, scr_y);
-      
-      int start_x = scr_x - 5.0f;
-      int end_x = scr_x + 5.0f;
-      
-      int start_y = scr_y - 5.0f;
-      int end_y = scr_y + 5.0f;
-      
-      for (int j = start_y; j < end_y; j++) {
-        for (int k = start_x; k < end_x; k++) {
-          if (k < 0 || k >= VX_WIDTH || j < 0 || j >= VX_HEIGHT) continue; // TODO: get gud
-          
-          if (dir_z < screen_depths[k + j * VX_WIDTH]) {
-            ImageDrawPixel(&screen, k, j, MAGENTA);
-            screen_depths[k + j * VX_WIDTH] = dir_z;
-          }
-        }
       }
     }
     
@@ -976,15 +933,67 @@ int main(int argc, const char **argv) {
         Color color = plot_pixel(&depth, vx_player.pos_x, vx_player.pos_y + 0.5f, vx_player.pos_z, x, y, dir_x, dir_y, dir_z, VX_LIMIT);
         color.a = 255;
         
-        if (depth < screen_depths[x + y * VX_WIDTH]) {
-          ImageDrawPixel(&screen, x, y, color);
-          screen_depths[x + y * VX_WIDTH] = depth;
-        }
+        ImageDrawPixel(&screen, x, y, color);
+        screen_depths[x + y * VX_WIDTH] = depth;
       }
     }
     
     UpdateTexture(texture, screen.data);
     DrawTextureEx(texture, (Vector2){0, 0}, 0, VX_ZOOM, WHITE);
+    
+    for (int i = 0; i < vx_client_count; i++) {
+      float rel_x = vx_clients[i].pos_x - vx_player.pos_x;
+      float rel_y = vx_clients[i].pos_y - vx_player.pos_y;
+      float rel_z = vx_clients[i].pos_z - vx_player.pos_z;
+      
+      float dir_x;
+      float dir_y;
+      float dir_z;
+      
+      dir_x = rel_x * fast_cos(angle_lr) - rel_z * fast_sin(angle_lr);
+      dir_y = rel_y;
+      dir_z = rel_z * fast_cos(angle_lr) + rel_x * fast_sin(angle_lr);
+      
+      rel_x = dir_x;
+      rel_y = dir_y;
+      rel_z = dir_z;
+      
+      dir_x = rel_x;
+      dir_y = rel_y * fast_cos(angle_ud) + rel_z * fast_sin(angle_ud);
+      dir_z = rel_z * fast_cos(angle_ud) - rel_y * fast_sin(angle_ud);
+      
+      if (dir_z < 0.0f) continue;
+      
+      dir_x /= dir_z;
+      dir_y /= dir_z;
+      
+      float scr_x = ((dir_x + 1.0f) / 2.0f) * VX_WIDTH;
+      float scr_y = (((-dir_y / ratio_y) + 1.0f) / 2.0f) * VX_HEIGHT;
+      
+      float scale = (VX_WIDTH * 0.25f) / dir_z;
+      
+      int start_x = scr_x - scale;
+      int end_x = scr_x + scale;
+      
+      int start_y = scr_y - scale;
+      int end_y = scr_y + scale * 3.0f;
+      
+      for (int j = start_y; j < end_y; j++) {
+        for (int k = start_x; k < end_x; k++) {
+          if (k < 0 || k >= VX_WIDTH || j < 0 || j >= VX_HEIGHT) continue;
+          
+          if (dir_z < screen_depths[k + j * VX_WIDTH]) {
+            DrawRectangle(k * VX_ZOOM, j * VX_ZOOM, VX_ZOOM, VX_ZOOM, MAGENTA);
+            screen_depths[k + j * VX_WIDTH] = dir_z;
+          }
+        }
+      }
+      
+      int length = MeasureText(vx_clients[i].name, 30) + 6;
+      
+      DrawRectangle((int)(scr_x * VX_ZOOM) - (length / 2), start_y * VX_ZOOM - 40, length, 36, (Color){0, 0, 0, 127});
+      DrawText(vx_clients[i].name, ((int)(scr_x * VX_ZOOM) - (length / 2)) + 3, start_y * VX_ZOOM - 33, 30, WHITE);
+    }
     
     float old_x = vx_player.pos_x;
     float old_y = vx_player.pos_y;

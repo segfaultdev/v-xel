@@ -59,6 +59,10 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         uint32_t chunk_z = packet->place.z / VX_CHUNK_Z;
         uint32_t tile_z = packet->place.z % VX_CHUNK_Z;
         
+        if (!vx_chunks[chunk_x + chunk_z * VX_TOTAL_X]) {
+          vx_chunk_load(chunk_x, chunk_z);
+        }
+        
         if (vx_chunks[chunk_x + chunk_z * VX_TOTAL_X]) {
           vx_chunks[chunk_x + chunk_z * VX_TOTAL_X]->data[tile_x + (tile_z + packet->place.y * VX_CHUNK_Z) * VX_CHUNK_X] = packet->place.tile;
           vx_chunks[chunk_x + chunk_z * VX_TOTAL_X]->dirty = 1;
@@ -92,6 +96,21 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
         
         memcpy(response, packet, vx_packet_size(vx_packet_update));
+        msg_send(vx_clients[i].connection, msg_data);
+        
+        msg_delete_data(msg_data);
+      }
+    } else if (packet->type == vx_packet_chat) {
+      printf("%s: %s\n", client->name, packet->chat.data);
+      
+      for (int i = 0; i < VX_MAX_CLIENTS; i++) {
+        if (vx_clients[i].connection == conn) continue;
+        if (!vx_clients[i].connection) continue;
+        
+        msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_chat) + packet->chat.length);
+        vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
+        
+        memcpy(response, packet, vx_packet_size(vx_packet_chat) + packet->chat.length);
         msg_send(vx_clients[i].connection, msg_data);
         
         msg_delete_data(msg_data);

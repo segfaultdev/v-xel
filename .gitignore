@@ -1,3 +1,4 @@
 server/chunks/
 server/server
 client/client
+.vscode/

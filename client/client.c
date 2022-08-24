@@ -7,12 +7,12 @@
 #include <math.h>
 #include <time.h>
 
-#define VX_WIDTH       (288 * 4) // 288
-#define VX_HEIGHT      (162 * 4) // 162
-#define VX_ZOOM        1
-#define VX_ITER        127
-#define VX_SHADOW_ITER 255
-#define VX_LIMIT       2
+#define VX_WIDTH       192 // 288
+#define VX_HEIGHT      108 // 162
+#define VX_ZOOM        5
+#define VX_ITER        256
+#define VX_SHADOW_ITER 256
+#define VX_LIMIT       3
 
 #define AIR_COLOR (Color){127, 127, 255, 0}
 

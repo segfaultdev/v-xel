@@ -10,6 +10,7 @@ static pthread_t loader_thread;
 static int loader_waiting = 0;
 
 static msg_Conn *connection = NULL;
+static const char *connection_ip = NULL;
 
 static void client_update(msg_Conn *conn, msg_Event event, msg_Data data) {
   if (event == msg_connection_ready) {
@@ -69,7 +70,10 @@ static void client_update(msg_Conn *conn, msg_Event event, msg_Data data) {
 }
 
 static void *loader_function(void *) {
-  msg_connect("tcp://127.0.0.1:14142", client_update, msg_no_context);
+  char buffer[128];
+  sprintf(buffer, "tcp://%s:14142", connection_id);
+  
+  msg_connect(buffer, client_update, msg_no_context);
   
   for (;;) {
     msg_runloop(10);
@@ -104,7 +108,8 @@ static void *loader_function(void *) {
   pthread_exit(NULL);
 }
 
-void vx_loader_init(void) {
+void vx_loader_init(const char *server_ip) {
+  connection_ip = server_ip;
   pthread_create(&loader_thread, NULL, loader_function, NULL);
 }
 

@@ -873,6 +873,11 @@ void handle_y(float old_y) {
 }
 
 int main(int argc, const char **argv) {
+  if (argc != 3) {
+    printf("usage: %s [NAME] [SERVER]\n", argv[0]);
+    exit(1);
+  }
+  
   strcpy(vx_name, argv[1]);
   
   InitWindow(VX_WIDTH * VX_ZOOM, VX_HEIGHT * VX_ZOOM, vx_name);
@@ -892,7 +897,7 @@ int main(int argc, const char **argv) {
   float *screen_depths = malloc(VX_WIDTH * VX_HEIGHT * sizeof(float)); // more cum
   
   vx_chunk_init();
-  vx_loader_init();
+  vx_loader_init(argv[2]);
   
   while (!WindowShouldClose()) {
     BeginDrawing();

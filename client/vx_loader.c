@@ -71,7 +71,7 @@ static void client_update(msg_Conn *conn, msg_Event event, msg_Data data) {
 
 static void *loader_function(void *) {
   char buffer[128];
-  sprintf(buffer, "tcp://%s:14142", connection_id);
+  sprintf(buffer, "tcp://%s:14142", connection_ip);
   
   msg_connect(buffer, client_update, msg_no_context);
   

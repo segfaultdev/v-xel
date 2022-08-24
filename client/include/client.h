@@ -27,7 +27,7 @@ size_t vx_packet_size(uint16_t type);
 void    vx_chunk_init(void);
 uint8_t vx_chunk_get(uint32_t x, uint32_t y, uint32_t z);
 
-void vx_loader_init(void);
+void vx_loader_init(const char *server_ip);
 void vx_loader_place(uint8_t tile, uint32_t x, uint32_t y, uint32_t z);
 void vx_loader_update(float pos_x, float pos_y, float pos_z);
 

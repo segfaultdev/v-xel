@@ -152,7 +152,6 @@ static void vx_chunk_unload_single(int index) {
 
 void vx_chunk_unload(int count) {
   // printf("unloading %d chunks out of %d\n", count, vx_loaded_count);
-  
   for (int i = 0; i < count; i++) {
     vx_chunk_unload_single(i);
   }

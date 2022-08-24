@@ -1,4 +1,4 @@
-#include <client.h>
+#include <stb_image.h>
 #include <raylib.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -7,12 +7,15 @@
 #include <math.h>
 #include <time.h>
 
-#define VX_WIDTH       (288 * 4) // 288
-#define VX_HEIGHT      (162 * 4) // 162
-#define VX_ZOOM        1
-#define VX_ITER        127
-#define VX_SHADOW_ITER 255
-#define VX_LIMIT       2
+#define VX_WIDTH       288
+#define VX_HEIGHT      162
+#define VX_ZOOM        6
+#define VX_SIZE_X      (int64_t)(1024)
+#define VX_SIZE_Y      (int64_t)(128)
+#define VX_SIZE_Z      (int64_t)(1024)
+#define VX_ITER        480
+#define VX_SHADOW_ITER 480
+#define VX_LIMIT       3
 
 #define AIR_COLOR (Color){127, 127, 255, 0}
 
@@ -26,15 +29,14 @@
 #define fast_sin(num) (fast_cos((num) + 1.5f * PI))
 #define fast_abs(num) ((num) < 0 ? -(num) : (num))
 
-char vx_name[20];
+uint8_t *world = NULL;
+uint8_t *height_map = NULL;
 
 uint8_t *cloud_map = NULL;
 
-vx_client_t vx_player = (vx_client_t){
-  .pos_x = 16384.0f,
-  .pos_y = 16384.0f,
-  .pos_z = 16384.0f,
-};
+float cam_x = VX_SIZE_X / 2;
+float cam_y = 4;
+float cam_z = VX_SIZE_Z / 2;
 
 float vel_y = 0;
 int on_ground = 0;
@@ -58,7 +60,7 @@ int seed = 0;
 
 float daytime = 0.25f;
 
-static inline float fast_cos(float x) {
+float fast_cos(float x) {
   float tp = 1 / (2 * PI);
 
   x = fast_abs(x * tp);
@@ -71,109 +73,92 @@ static inline float fast_cos(float x) {
   return x;
 }
 
-uint32_t seed_3a = 1;
-uint32_t seed_3b = 1;
-uint32_t seed_3c = 1;
-
-static uint32_t rand_3() {
-  seed_3a = (seed_3a * 1664525 + 1013904223) % 1431655765;
-  seed_3b = (seed_3b * 16843019 + 826366249) % 1431655765;
-  seed_3c = (seed_3c * 16843031 + 826366237) % 1431655765;
-  
-  return seed_3a + seed_3b + seed_3c;
-}
-
-static inline float grad_2(int x, int y) {
-  x %= 8;
-  y %= 16;
-  
-  while (x < 0) x += 8;
-  while (y < 0) y += 16;
-  
-  seed_3a = (x * 1664525 + 1013904223) % 1431655765;
-  seed_3b = (y * 16843019 + 826366249) % 1431655765;
-  seed_3c = ((seed_3a + seed_3b) * 16843031 + 826366237) % 1431655765;
-  
-  int count = rand_3() % 2;
-  for (int i = 0; i < count; i++) {
-    rand_3();
-  }
-  
-  return fabs(rand_3() % 65537) / 65537.0;
-}
-
-static inline float lerp(float x, float y, float w) {
+float lerp(float x, float y, float w) {
   if (w < 0) return x;
   if (w > 1) return y;
   
-  return (y - x) * ((w * (w * 6.0f - 15.0f) + 10.0f) * w * w * w) + x;
+  return (y - x) * ((w * (w * 6.0 - 15.0) + 10.0) * w * w * w) + x;
 }
 
-static inline float eval_2(float x, float y) {
-  x = x - (int)(x / 8) * 8;
-  y = y - (int)(y / 8) * 16;
+uint8_t get_world(int64_t x, int64_t y, int64_t z) {
+  x %= VX_SIZE_X;
+  z %= VX_SIZE_Z;
   
-  while (x < 0) x += 8;
-  while (y < 0) y += 16;
+  while (x < 0) x += VX_SIZE_X;
+  while (z < 0) z += VX_SIZE_Z;
   
-  x -= (y / 2);
-  
-  float dx = x - floorf(x);
-  float dy = y - floorf(y);
-  
-  if (1 - dx < dy) {
-    float tmp = dx;
-    
-    dx = 1 - dy;
-    dy = 1 - tmp;
-    
-    float s = ((dx - dy) + 1) / 2;
-    float h = dx + dy;
-    
-    float t = lerp(grad_2(floorf(x + 0), floorf(y + 1)), grad_2(floorf(x + 1), floorf(y + 0)), s);
-    return lerp(grad_2(floorf(x + 1), floorf(y + 1)), t, h);
-  } else {
-    float s = ((dx - dy) + 1) / 2;
-    float h = dx + dy;
-    
-    float t = lerp(grad_2(floorf(x + 0), floorf(y + 1)), grad_2(floorf(x + 1), floorf(y + 0)), s);
-    return lerp(grad_2(floorf(x + 0), floorf(y + 0)), t, h);
+  if (y < 0 || y >= VX_SIZE_Y) {
+    return 0;
   }
-}
-
-static inline uint8_t get_world(int64_t x, int64_t y, int64_t z) {
-  return vx_chunk_get(x, y, z);
-}
-
-static inline int is_solid(int64_t x, int64_t y, int64_t z) {
-  int tile = get_world(x, y, z);
-  return (tile != vx_tile_air && tile != vx_tile_water);
-}
-
-static inline Color get_color(int x, int y, int z) {
-  uint8_t tile = get_world(x, y, z);
   
-  if (tile == vx_tile_grass) {
+  return world[x + (y + z * VX_SIZE_Y) * VX_SIZE_X];
+}
+
+int is_solid(int64_t x, int64_t y, int64_t z) {
+  int tile = get_world(x, y, z);
+  return (tile != 0 && tile != 3 && tile != 8 && tile != 9 && tile != 10);
+}
+
+Color get_color(int x, int y, int z) {
+  if (get_world(x, y, z) == 1) {
     return (Color){63, 223, 63, 255};
-  } else if (tile == vx_tile_dirt) {
+  } else if (get_world(x, y, z) == 2) {
     return (Color){159, 79, 15, 255};
-  } else if (tile == vx_tile_water) {
+  } else if (get_world(x, y, z) == 3) {
     return (Color){63, 95, 255, 255};
-  } else if (tile == vx_tile_stone) {
+  } else if (get_world(x, y, z) == 4) {
+    return (Color){255, 0, 0, 255};
+  } else if (get_world(x, y, z) == 5) {
+    return (Color){255, 255, 0, 255};
+  } else if (get_world(x, y, z) == 6) {
+    return (Color){0, 0, 255, 255};
+  } else if (get_world(x, y, z) == 7) {
     return (Color){159, 159, 159, 255};
-  } else if (tile == vx_tile_sand) {
-    return (Color){255, 255, 127, 255};
-  } else if (tile == vx_tile_trunk) {
+  } else if (get_world(x, y, z) == 8) {
+    return (Color){255, 0, 0, 255};
+  } else if (get_world(x, y, z) == 9) {
+    return (Color){255, 255, 0, 255};
+  } else if (get_world(x, y, z) == 10) {
+    return (Color){0, 0, 255, 255};
+  } else if (get_world(x, y, z) == 11) {
     return (Color){79, 39, 7, 255};
-  } else if (tile == vx_tile_leaves) {
+  } else if (get_world(x, y, z) == 12) {
     return (Color){31, 111, 31, 255};
+  } else if (get_world(x, y, z) == 13) {
+    return (Color){255, 255, 127, 255};
   }
   
   return BLACK;
 }
 
 void set_world(uint8_t value, int64_t x, int64_t y, int64_t z) {
-  vx_loader_place(value, x, y, z);
+  x %= VX_SIZE_X;
+  z %= VX_SIZE_Z;
+  
+  while (x < 0) x += VX_SIZE_X;
+  while (z < 0) z += VX_SIZE_Z;
+  
+  if (y < 0 || y >= VX_SIZE_Y) {
+    return;
+  }
+  
+  world[x + (y + z * VX_SIZE_Y) * VX_SIZE_X] = value;
+  
+  if (value) {
+    if (y > height_map[x + z * VX_SIZE_X]) {
+      height_map[x + z * VX_SIZE_X] = y;
+    }
+  } else {
+    if (y == height_map[x + z * VX_SIZE_X]) {
+      int64_t i = y;
+      
+      while (i && !world[x + (i + z * VX_SIZE_Y) * VX_SIZE_X]) {
+        i--;
+      }
+      
+      height_map[x + z * VX_SIZE_X] = i;
+    }
+  }
 }
 
 float get_hue(float r, float g, float b) {
@@ -265,10 +250,16 @@ Color plot_shadow(float cam_x, float cam_y, float cam_z, float dir_x, float dir_
       dist = side_z - delta_z;
     }
     
-    if (pos_y < 0 || pos_y >= VX_CHUNK_Y) break;
+    if (pos_y > height_map[pos_x + pos_z * VX_SIZE_X]) {
+      if (step_y > 0 || (side_y > side_x && side_y > side_z)) {
+        continue;
+      }
+    }
+        
+    if (pos_y < 0 || pos_y >= VX_SIZE_Y) break;
     uint8_t tile = get_world(pos_x, pos_y, pos_z);
     
-    if (tile == vx_tile_water && !get_world(pos_x, pos_y + 1, pos_z)) {
+    if (tile == 3 && !get_world(pos_x, pos_y + 1, pos_z)) {
       float hit_x = cam_x + dir_x * dist;
       float hit_y = cam_y + dir_y * dist;
       float hit_z = cam_z + dir_z * dist; 
@@ -294,10 +285,10 @@ Color plot_shadow(float cam_x, float cam_y, float cam_z, float dir_x, float dir_
   return (Color){255, 255, 255, 255};
 }
 
-static inline Color plot_pixel(float *depth, float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, float dir_x, float dir_y, float dir_z, int limit) {
-  int32_t pos_x = floorf(cam_x);
-  int32_t pos_y = floorf(cam_y);
-  int32_t pos_z = floorf(cam_z);
+Color plot_pixel(float *depth, float cam_x, float cam_y, float cam_z, int scr_x, int scr_y, float dir_x, float dir_y, float dir_z, int limit) {
+  int64_t pos_x = floorf(cam_x);
+  int64_t pos_y = floorf(cam_y);
+  int64_t pos_z = floorf(cam_z);
   
   float side_x = 0;
   float side_y = 0;
@@ -371,11 +362,17 @@ static inline Color plot_pixel(float *depth, float cam_x, float cam_y, float cam
     } else if (hit_side == 2) {
       dist = side_z - delta_z;
     }
-     
-    if (pos_y < 0 || pos_y >= VX_CHUNK_Y) break;
+    
+    if (pos_y > height_map[pos_x + pos_z * VX_SIZE_X]) {
+      if (step_y > 0 || (side_y > side_x && side_y > side_z)) {
+        continue;
+      }
+    }
+        
+    if (pos_y < 0 || pos_y >= VX_SIZE_Y) break;
     uint8_t tile = get_world(pos_x, pos_y, pos_z);
     
-    if (tile == vx_tile_water && !get_world(pos_x, pos_y + 1, pos_z)) {
+    if (tile == 3 && !get_world(pos_x, pos_y + 1, pos_z)) {
       float hit_x = cam_x + dir_x * dist;
       float hit_y = cam_y + dir_y * dist;
       float hit_z = cam_z + dir_z * dist; 
@@ -661,7 +658,7 @@ static inline Color plot_pixel(float *depth, float cam_x, float cam_y, float cam
         }
       }
       
-      if (tile == vx_tile_water) {
+      if (tile == 3) {
         Color new_color;
         
         float new_x = dir_x * 0.99f + fast_sin((hit_x + hit_y + hit_z - 0.17f * GetTime()) * 13.0f) * 0.01f;
@@ -746,11 +743,11 @@ static inline Color plot_pixel(float *depth, float cam_x, float cam_y, float cam
   if (dir_y < 0.000001f) dir_y = 0.000001f;
   float ceil_w = (160.0f - cam_y) / dir_y;
   
-  float ceil_x = fmodf((cam_x + dir_x * ceil_w) + daytime * VX_CLOUD_SIDE, VX_CLOUD_SIDE);
-  while (ceil_x < 0.0f) ceil_x += VX_CLOUD_SIDE;
+  float ceil_x = fmodf((cam_x + dir_x * ceil_w) + daytime * VX_SIZE_X, VX_SIZE_X);
+  while (ceil_x < 0.0f) ceil_x += VX_SIZE_X;
   
-  float ceil_z = fmodf((cam_z + dir_z * ceil_w) - daytime * VX_CLOUD_SIDE, VX_CLOUD_SIDE);
-  while (ceil_z < 0.0f) ceil_z += VX_CLOUD_SIDE;
+  float ceil_z = fmodf((cam_z + dir_z * ceil_w) - daytime * VX_SIZE_X, VX_SIZE_Z);
+  while (ceil_z < 0.0f) ceil_z += VX_SIZE_Z;
   
   int alpha = 0;
   
@@ -767,7 +764,7 @@ static inline Color plot_pixel(float *depth, float cam_x, float cam_y, float cam
   ceil_w = ((240.0f - cam_y) / dir_y) / 100.0f;
   ceil_w = 32.0f / ceil_w;
   
-  if (old_y >= 0.000001f && cloud_map[(int)(ceil_x) + (int)(ceil_z) * VX_CLOUD_SIDE]) {
+  if (old_y >= 0.000001f && cloud_map[(int)(ceil_x) + (int)(ceil_z) * VX_SIZE_X]) {
     ceil_w = lerp(0.0f, ceil_w, light);
     alpha = 127;
   }
@@ -799,149 +796,368 @@ static inline Color plot_pixel(float *depth, float cam_x, float cam_y, float cam
   
   if (depth) *depth = -1.0f;
   return (Color){255 * r, 255 * g, 255 * b, alpha};
+}  
+
+unsigned int seed_3a = 1;
+unsigned int seed_3b = 1;
+unsigned int seed_3c = 1;
+
+unsigned int rand_3() {
+  seed_3a = (seed_3a * 1664525 + 1013904223) % 1431655765;
+  seed_3b = (seed_3b * 16843019 + 826366249) % 1431655765;
+  seed_3c = (seed_3c * 16843031 + 826366237) % 1431655765;
+  
+  return seed_3a + seed_3b + seed_3c;
 }
 
-void handle_xz(float old_x, float old_z) {
-  int tile_lo = get_world(vx_player.pos_x, vx_player.pos_y - 1.0f, vx_player.pos_z);
-  int tile_hi = get_world(vx_player.pos_x, vx_player.pos_y + 0.0f, vx_player.pos_z);
+float grad_1(int x) {
+  x %= 16;
+  while (x < 0) x += 16;
   
-  if (tile_lo || tile_hi) {
-    if ((int)(vx_player.pos_x) != (int)(old_x) && (int)(vx_player.pos_z) == (int)(old_z)) {
-      vx_player.pos_x = (vx_player.pos_x > old_x) ? ((int)(vx_player.pos_x) - 0.01f) : ((int)(old_x) + 0.01f);
-    } else if ((int)(vx_player.pos_x) == (int)(old_x) && (int)(vx_player.pos_z) != (int)(old_z)) {
-      vx_player.pos_z = (vx_player.pos_z > old_z) ? ((int)(vx_player.pos_z) - 0.01f) : ((int)(old_z) + 0.01f);
-    } else if ((int)(vx_player.pos_x) != (int)(old_x) && (int)(vx_player.pos_z) != (int)(old_z)) {
-      
-      float col_x = fast_abs(old_x - ((vx_player.pos_x > old_x) ? ((int)(vx_player.pos_x) - 0.01f) : (int)(old_x) + 0.01f));
-      float col_z = fast_abs(old_z - ((vx_player.pos_z > old_z) ? ((int)(vx_player.pos_z) - 0.01f) : (int)(old_z) + 0.01f));
-      
-      if (col_x < col_z) {
-        vx_player.pos_x = (vx_player.pos_x > old_x) ? ((int)(vx_player.pos_x) - 0.01f) : ((int)(old_x) + 0.01f);
-      } else {
-        vx_player.pos_z = (vx_player.pos_z > old_z) ? ((int)(vx_player.pos_z) - 0.01f) : ((int)(old_z) + 0.01f);
+  x += 7 * seed;
+  
+  seed_3a = (x * 1664525 + 1013904223) % 1431655765;
+  seed_3b = (x * 16843019 + 826366249) % 1431655765;
+  seed_3c = ((seed_3a + seed_3b) * 16843031 + 826366237) % 1431655765;
+  
+  int count = rand_3() % 2;
+  
+  for (int i = 0; i < count; i++) {
+    rand_3();
+  }
+  
+  return fast_abs(rand_3() % 65537) / 65537.0;
+}
+
+float grad_2(int x, int y) {
+  x %= 8;
+  y %= 16;
+  
+  while (x < 0) x += 8;
+  while (y < 0) y += 16;
+  
+  x +=  3 * seed;
+  y += 17 * seed;
+  
+  seed_3a = (x * 1664525 + 1013904223) % 1431655765;
+  seed_3b = (y * 16843019 + 826366249) % 1431655765;
+  seed_3c = ((seed_3a + seed_3b) * 16843031 + 826366237) % 1431655765;
+  
+  int count = rand_3() % 2;
+  
+  for (int i = 0; i < count; i++) {
+    rand_3();
+  }
+  
+  return fast_abs(rand_3() % 65537) / 65537.0;
+}
+
+float eval_1(float x) {
+  x = x - (int)(x / 16) * 16;
+  while (x < 0) x += 16;
+  
+  float dx = x - floorf(x);
+  return lerp(grad_1(floorf(x + 0)), grad_1(floorf(x + 1)), dx);
+}
+
+float eval_2(float x, float y) {
+  x = x - (int)(x / 8) * 8;
+  y = y - (int)(y / 8) * 16;
+  
+  while (x < 0) x += 8;
+  while (y < 0) y += 16;
+  
+  x -= (y / 2);
+  
+  float dx = x - floorf(x);
+  float dy = y - floorf(y);
+  
+  if (1 - dx < dy) {
+    float tmp = dx;
+    
+    dx = 1 - dy;
+    dy = 1 - tmp;
+    
+    float s = ((dx - dy) + 1) / 2;
+    float h = dx + dy;
+    
+    float t = lerp(grad_2(floorf(x + 0), floorf(y + 1)), grad_2(floorf(x + 1), floorf(y + 0)), s);
+    return lerp(grad_2(floorf(x + 1), floorf(y + 1)), t, h);
+  } else {
+    float s = ((dx - dy) + 1) / 2;
+    float h = dx + dy;
+    
+    float t = lerp(grad_2(floorf(x + 0), floorf(y + 1)), grad_2(floorf(x + 1), floorf(y + 0)), s);
+    return lerp(grad_2(floorf(x + 0), floorf(y + 0)), t, h);
+  }
+}
+
+void set_tree(int64_t x, int64_t y, int64_t z) {
+  int64_t length = 4 + (rand_3() % 3);
+  
+  for (int64_t i = 0; i < length; i++) {
+    set_world(11, x, y + i, z);
+  }
+  
+  for (int64_t i = -2; i <= 2; i++) {
+    for (int64_t j = -2; j <= 1; j++) {
+      for (int64_t k = -2; k <= 2; k++) {
+        if (i * i + j * j + k * k > 5) {
+          continue;
+        }
+        
+        if (!get_world(x + k, y + (length - 1) + j, z + i)) {
+          set_world(12, x + k, y + (length - 1) + j, z + i);
+        }
       }
     }
   }
   
-  tile_lo = get_world(vx_player.pos_x, vx_player.pos_y - 1.0f, vx_player.pos_z);
-  tile_hi = get_world(vx_player.pos_x, vx_player.pos_y + 0.0f, vx_player.pos_z);
+  /*
+  int64_t length = 11 + (rand_3() % 3);
+  
+  for (int64_t i = 0; i < length; i++) {
+    set_world(11, x, y + i, z);
+  }
+  
+  for (int64_t i = -3; i <= 3; i++) {
+    for (int64_t j = 0; j <= 8; j++) {
+      for (int64_t k = -3; k <= 3; k++) {
+        if (j % 2 || i * i + k * k >= (3.5f - j / 3.0f) * (3.5f - j / 3.0f)) {
+          continue;
+        }
+        
+        if (!get_world(x + k, y + (length - 1) + j - 7, z + i)) {
+          set_world(12, x + k, y + (length - 1) + j - 7, z + i);
+        }
+      }
+    }
+  }
+  */
+}
+
+void handle_xz(float old_x, float old_z) {
+  int tile_lo = get_world(cam_x, cam_y - 1.0f, cam_z);
+  int tile_hi = get_world(cam_x, cam_y + 0.0f, cam_z);
   
   if (tile_lo || tile_hi) {
-    if ((int)(vx_player.pos_x) != (int)(old_x) && (int)(vx_player.pos_z) == (int)(old_z)) {
-      vx_player.pos_x = (vx_player.pos_x > old_x) ? ((int)(vx_player.pos_x) - 0.01f) : ((int)(old_x) + 0.01f);
-    } else if ((int)(vx_player.pos_x) == (int)(old_x) && (int)(vx_player.pos_z) != (int)(old_z)) {
-      vx_player.pos_z = (vx_player.pos_z > old_z) ? ((int)(vx_player.pos_z) - 0.01f) : ((int)(old_z) + 0.01f);
-    } else if ((int)(vx_player.pos_x) != (int)(old_x) && (int)(vx_player.pos_z) != (int)(old_z)) {
+    if ((int)(cam_x) != (int)(old_x) && (int)(cam_z) == (int)(old_z)) {
+      cam_x = (cam_x > old_x) ? ((int)(cam_x) - 0.01f) : ((int)(old_x) + 0.01f);
+    } else if ((int)(cam_x) == (int)(old_x) && (int)(cam_z) != (int)(old_z)) {
+      cam_z = (cam_z > old_z) ? ((int)(cam_z) - 0.01f) : ((int)(old_z) + 0.01f);
+    } else if ((int)(cam_x) != (int)(old_x) && (int)(cam_z) != (int)(old_z)) {
       
-      float col_x = fast_abs(old_x - ((vx_player.pos_x > old_x) ? ((int)(vx_player.pos_x) - 0.01f) : (int)(old_x) + 0.01f));
-      float col_z = fast_abs(old_z - ((vx_player.pos_z > old_z) ? ((int)(vx_player.pos_z) - 0.01f) : (int)(old_z) + 0.01f));
+      float col_x = fast_abs(old_x - ((cam_x > old_x) ? ((int)(cam_x) - 0.01f) : (int)(old_x) + 0.01f));
+      float col_z = fast_abs(old_z - ((cam_z > old_z) ? ((int)(cam_z) - 0.01f) : (int)(old_z) + 0.01f));
       
       if (col_x < col_z) {
-        vx_player.pos_x = (vx_player.pos_x > old_x) ? ((int)(vx_player.pos_x) - 0.01f) : ((int)(old_x) + 0.01f);
+        cam_x = (cam_x > old_x) ? ((int)(cam_x) - 0.01f) : ((int)(old_x) + 0.01f);
       } else {
-        vx_player.pos_z = (vx_player.pos_z > old_z) ? ((int)(vx_player.pos_z) - 0.01f) : ((int)(old_z) + 0.01f);
+        cam_z = (cam_z > old_z) ? ((int)(cam_z) - 0.01f) : ((int)(old_z) + 0.01f);
+      }
+    }
+  }
+  
+  tile_lo = get_world(cam_x, cam_y - 1.0f, cam_z);
+  tile_hi = get_world(cam_x, cam_y + 0.0f, cam_z);
+  
+  if (tile_lo || tile_hi) {
+    if ((int)(cam_x) != (int)(old_x) && (int)(cam_z) == (int)(old_z)) {
+      cam_x = (cam_x > old_x) ? ((int)(cam_x) - 0.01f) : ((int)(old_x) + 0.01f);
+    } else if ((int)(cam_x) == (int)(old_x) && (int)(cam_z) != (int)(old_z)) {
+      cam_z = (cam_z > old_z) ? ((int)(cam_z) - 0.01f) : ((int)(old_z) + 0.01f);
+    } else if ((int)(cam_x) != (int)(old_x) && (int)(cam_z) != (int)(old_z)) {
+      
+      float col_x = fast_abs(old_x - ((cam_x > old_x) ? ((int)(cam_x) - 0.01f) : (int)(old_x) + 0.01f));
+      float col_z = fast_abs(old_z - ((cam_z > old_z) ? ((int)(cam_z) - 0.01f) : (int)(old_z) + 0.01f));
+      
+      if (col_x < col_z) {
+        cam_x = (cam_x > old_x) ? ((int)(cam_x) - 0.01f) : ((int)(old_x) + 0.01f);
+      } else {
+        cam_z = (cam_z > old_z) ? ((int)(cam_z) - 0.01f) : ((int)(old_z) + 0.01f);
       }
     }
   }
 }
 
 void handle_y(float old_y) {
-  int tile_lo = get_world(vx_player.pos_x, vx_player.pos_y - 1.0f, vx_player.pos_z);
-  int tile_hi = get_world(vx_player.pos_x, vx_player.pos_y + 0.5f, vx_player.pos_z);
+  int tile_lo = get_world(cam_x, cam_y - 1.0f, cam_z);
+  int tile_hi = get_world(cam_x, cam_y + 0.5f, cam_z);
   
   on_ground = 0;
   
   if (tile_lo) {
-    vx_player.pos_y = (int)(vx_player.pos_y) + 1.0f;
+    cam_y = (int)(cam_y) + 1.0f;
     if (vel_y < 0.0f) vel_y = 0.0f;
     
     on_ground = 1;
   } else if (tile_hi) {
-    vx_player.pos_y = (int)(vx_player.pos_y) + 0.49f;
+    cam_y = (int)(cam_y) + 0.49f;
     if (vel_y > 0.0f) vel_y = 0.0f;
   }
 }
 
-int main(int argc, const char **argv) {
-  strcpy(vx_name, argv[1] ? argv[1] : "v!xel");
+int diff_x(float y) {
+  return 3.0f * eval_1(12.3f + y / 14.5f);
+}
+
+int diff_z(float y) {
+  return 3.0f * eval_1(45.6f + y / 12.3f);
+}
+
+float lerp_3(float a, float b, float c, float w) {
+  float w1 = w * 2.0f;
+  float w2 = w1 - 1.0f;
   
-  InitWindow(VX_WIDTH * VX_ZOOM, VX_HEIGHT * VX_ZOOM, vx_name);
+  if (w1 > 1.0f) w1 = 1.0f;
+  if (w2 < 0.0f) w2 = 0.0f;
+  
+  return lerp(lerp(a, b, w1), c, w2);
+}
+
+int main(int argc, const char **argv) {
+  InitWindow(VX_WIDTH * VX_ZOOM, VX_HEIGHT * VX_ZOOM, "v!xel");
   srand(time(0));
   
-  cloud_map = calloc(VX_CLOUD_SIDE * VX_CLOUD_SIDE, 1);
+  seed = rand() % 1048576;
   
-  for (int64_t i = 0; i < VX_CLOUD_SIDE; i++) {
-    for (int64_t j = 0; j < VX_CLOUD_SIDE; j++) {
-      if (eval_2((int)(j / 8) / 4.0f + 11.2f, (int)(i / 8) / 4.0f + 6.5f) < 0.3f) cloud_map[i + j * VX_CLOUD_SIDE] = 1;
+  world = calloc(VX_SIZE_X * VX_SIZE_Y * VX_SIZE_Z, 1);
+  height_map = calloc(VX_SIZE_X * VX_SIZE_Z, 2);
+  
+  cloud_map = calloc(VX_SIZE_X * VX_SIZE_Z, 1);
+  
+  for (int64_t i = 0; i < VX_SIZE_X; i++) {
+    for (int64_t j = 0; j < VX_SIZE_Z; j++) {
+      if (eval_2((int)(j / 8) / 4.0f + 11.2f, (int)(i / 8) / 4.0f + 6.5f) < 0.3f) cloud_map[i + j * VX_SIZE_X] = 1;
     }
+  }
+  
+  int diffs_x[VX_SIZE_Y];
+  int diffs_z[VX_SIZE_Y];
+  
+  for (int64_t i = 0; i < VX_SIZE_Y; i++) {
+    diffs_x[i] = diff_x(i);
+    diffs_z[i] = diff_z(i);
+  }
+  
+  for (int64_t i = 0; i < VX_SIZE_X; i++) {
+    for (int64_t j = 0; j < VX_SIZE_Z; j++) {
+      float value_1 = eval_2(45.6f + j / 64.0f, i / 64.0f);
+      float value_2 = roundf(value_1 * 5.0f) / 5.0f;
+      float value_3 = eval_2(j / 32.0f + value_2 * 91.1f, i / 32.0f - value_2 * 33.6f);
+      float value_4 = 1.0f - fabs(1.0f - eval_2(78.9f + i / 16.0f, j / 16.0f) * 2.0f);
+      float value_5 = eval_2(i / 32.0f, j / 32.0f);
+      float value_6 = eval_2(j / 64.0f, i / 64.0f);
+      
+      int64_t height = 32.0f + floorf(80.0f * value_6 * value_6 * lerp(value_3, value_4, value_5 * value_5));
+      
+      if (i == (int)(cam_x) % VX_SIZE_X && j == (int)(cam_z) % VX_SIZE_Z) {
+        cam_y = MAX(36, height) + 3.0f;
+      }
+      
+      for (int64_t k = 0; k <= height; k++) {
+        set_world(2, i + diffs_x[k], k, j + diffs_z[k]);
+      }
+      
+      for (int64_t k = height + 1; k <= 36; k++) {
+        set_world(3, i + diffs_x[k], k, j + diffs_z[k]);
+      }
+    }
+    
+    printf("terrain: %.2f%% done\n", (i * 100.0f) / VX_SIZE_X);
+  }
+  
+  for (int64_t i = 0; i < VX_SIZE_Z; i++) {
+    for (int64_t j = 0; j < 112; j++) {
+      for (int64_t k = 0; k < VX_SIZE_X; k++) {
+        if (j < 96) {
+          if (get_world(k, j, i) == 2 && get_world(k, j + 1, i) == 0) {
+            if (j <= 37) {
+              for (int64_t l = MAX(j - 2, 0); l <= j; l++) {
+                set_world(13, k, l, i);
+              }
+            } else {
+              set_world(1, k, j, i);
+            }
+            
+            continue;
+          }
+        }
+        
+        int total = 0;
+        int count = 0;
+        
+        for (int dz = -1; dz <= 1; dz++) {
+          for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -1; dx <= 1; dx++) {
+              int x = k + dx;
+              int y = j + dy;
+              int z = i + dz;
+              
+              if (y >= 0 && y < VX_SIZE_Y) {
+                total++;
+                
+                if (get_world(x, y, z)) {
+                  count++;
+                }
+              }
+            }
+          }
+        }
+        
+        if (count == total) {
+          set_world(7, k, j, i);
+        }
+      }
+    }
+    
+    printf("details: %.2f%% done\n", (i * 100.0f) / VX_SIZE_Z);
+  }
+  
+  int tree_count = VX_SIZE_X * VX_SIZE_Z * 0.15f * 0.015f;
+  
+  for (int i = 0; i < tree_count; i++) {
+    int64_t x = rand() % VX_SIZE_X;
+    int64_t z = rand() % VX_SIZE_Z;
+    
+    if (eval_2(14.1 + x / 20.0, 42.5 + z / 20.0) < 0.65f) {
+      i--;
+      continue;
+    }
+    
+    int64_t y = VX_SIZE_Y - 1;
+    
+    while (y >= 0 && !get_world(x, y - 1, z)) {
+      y--;
+    }
+    
+    if (y < 0) {
+      i--;
+      continue;
+    }
+    
+    if (get_world(x, y - 1, z) == 3 || get_world(x, y - 1, z) == 11 || get_world(x, y - 1, z) == 12) {
+      i--;
+      continue;
+    }
+    
+    set_tree(x, y, z);
+    printf("trees: %.2f%% done\n", (i * 100.0f) / tree_count);
   }
   
   Image screen = GenImageColor(VX_WIDTH, VX_HEIGHT, BLACK);
   Texture texture = LoadTextureFromImage(screen);
   
-  int *screen_depths = malloc(VX_WIDTH * VX_HEIGHT * sizeof(int)); // more cum
-  
-  vx_chunk_init();
-  vx_loader_init();
-
-  Color screenbuf[VX_WIDTH][VX_HEIGHT];
   while (!WindowShouldClose()) {
     BeginDrawing();
     ImageClearBackground(&screen, (Color){AIR_COLOR.r, AIR_COLOR.g, AIR_COLOR.b, 255});
     
     float ratio_y = (float)(VX_HEIGHT) / VX_WIDTH;
     
-#pragma omp parallel for
-    for (uint32_t y = 0; y < VX_HEIGHT; y++) {
-      for (uint32_t x = 0; x < VX_WIDTH; x++) {
-        screen_depths[x + y * VX_WIDTH] = 69420;
-      }
-    }
-    
-#pragma omp parallel for
-    for (int i = 0; i < vx_client_count; i++) {
-      float rel_x = vx_clients[i].pos_x - vx_player.pos_x;
-      float rel_y = vx_clients[i].pos_y - vx_player.pos_y;
-      float rel_z = vx_clients[i].pos_z - vx_player.pos_z;
-      
-      float dir_x;
-      float dir_y;
-      float dir_z;
-      
-      dir_x = rel_x * fast_cos(-angle_lr) - rel_z * fast_sin(-angle_lr);
-      dir_y = rel_y;
-      dir_z = rel_z * fast_cos(-angle_lr) + rel_x * fast_sin(-angle_lr);
-      
-      rel_x = dir_x;
-      rel_y = dir_y;
-      rel_z = dir_z;
-      
-      dir_x = rel_x;
-      dir_y = rel_y * fast_cos(-angle_ud) + rel_z * fast_sin(-angle_ud);
-      dir_z = rel_z * fast_cos(-angle_ud) - rel_y * fast_sin(-angle_ud);
-      
-      if (dir_z < 0.0f) continue;
-      
-      dir_x /= 0.5f * dir_z;
-      dir_y /= 0.5f * dir_z;
-      
-      float scr_x = ((dir_x + 1.0f) / 2.0f) * VX_WIDTH;
-      float scr_y = (((-dir_y / ratio_y) + 1.0f) / 2.0f) * VX_HEIGHT;
-      
-      printf("%.2f, %.2f, %.2f -~-_-> %.2f %.2f uwu\n", dir_x, dir_y, dir_z, scr_x, scr_y);
-      
-      int start_x = scr_x - 5.0f;
-      int end_x = scr_x + 5.0f;
-      
-      int start_y = scr_y - 5.0f;
-      int end_y = scr_y + 5.0f;
-    }
-
-#pragma omp parallel for
-    for (uint32_t y = 0; y < VX_HEIGHT; y++) {
-      for (uint32_t x = 0; x < VX_WIDTH; x++) {
-        float scr_x = (((float)(x) / VX_WIDTH) * 2 - 1) * 1;
-        float scr_y = (((float)(y) / VX_HEIGHT) * 2 - 1) * 1;
+    for (int64_t y = 0; y < VX_HEIGHT; y++) {
+      for (int64_t x = 0; x < VX_WIDTH; x++) {
+        float scr_x = (((float)(x) / VX_WIDTH) * 2 - 1) * 1.0f;
+        float scr_y = (((float)(y) / VX_HEIGHT) * 2 - 1) * 1.0f;
         
         float ray_x = scr_x;
         float ray_y = -scr_y * ratio_y;
@@ -959,33 +1175,28 @@ int main(int argc, const char **argv) {
         dir_y = ray_y;
         dir_z = ray_z * fast_cos(-angle_lr) + ray_x * fast_sin(-angle_lr);
         
-        float depth; // cum
-        
-        Color color = plot_pixel(&depth, vx_player.pos_x, vx_player.pos_y + 0.5f, vx_player.pos_z, x, y, dir_x, dir_y, dir_z, VX_LIMIT);
+        Color color = plot_pixel(NULL, cam_x, cam_y + 0.5f, cam_z, x, y, dir_x, dir_y, dir_z, VX_LIMIT);
         color.a = 255;
-
-        if (/* depth < screen_depths[x + y * VX_WIDTH] */ screen_depths[x + y * VX_WIDTH] == 69420) {
-          ImageDrawPixel(&screen, x, y, color);
-          screen_depths[x + y * VX_WIDTH] = depth;
-        }
+        
+        ImageDrawPixel(&screen, x, y, color);
       }
     }
     
     UpdateTexture(texture, screen.data);
     DrawTextureEx(texture, (Vector2){0, 0}, 0, VX_ZOOM, WHITE);
     
-    float old_x = vx_player.pos_x;
-    float old_y = vx_player.pos_y;
-    float old_z = vx_player.pos_z;
+    float old_x = cam_x;
+    float old_y = cam_y;
+    float old_z = cam_z;
     
     if (IsKeyDown(KEY_W)) {
-      vx_player.pos_x += 10.00 * fast_sin(angle_lr) * GetFrameTime();
-      vx_player.pos_z += 10.00 * fast_cos(angle_lr) * GetFrameTime();
+      cam_x += 10.00 * fast_sin(angle_lr) * GetFrameTime();
+      cam_z += 10.00 * fast_cos(angle_lr) * GetFrameTime();
       
       handle_xz(old_x, old_z);
     } else if (IsKeyDown(KEY_S)) {
-      vx_player.pos_x -= 10.00 * fast_sin(angle_lr) * GetFrameTime();
-      vx_player.pos_z -= 10.00 * fast_cos(angle_lr) * GetFrameTime();
+      cam_x -= 10.00 * fast_sin(angle_lr) * GetFrameTime();
+      cam_z -= 10.00 * fast_cos(angle_lr) * GetFrameTime();
       
       handle_xz(old_x, old_z);
     }
@@ -1003,10 +1214,28 @@ int main(int argc, const char **argv) {
     }
     
     if (IsKeyDown(KEY_SPACE)) {
-      vx_player.pos_y += 7.50 * GetFrameTime();
+      cam_y += 7.50 * GetFrameTime();
     } else if (IsKeyDown(KEY_LEFT_SHIFT)) {
-      vx_player.pos_y -= 7.50 * GetFrameTime();
+      cam_y -= 7.50 * GetFrameTime();
     }
+    
+    /*
+    if (IsKeyPressed(KEY_SPACE) && on_ground) {
+      vel_y = 10.0f;
+    }
+    
+    vel_y -= 20.0f * GetFrameTime();
+    
+    if (vel_y < -20.0f) vel_y = -20.0f;
+    if (vel_y > 20.0f) vel_y = 20.0f;
+    
+    float delta_y = vel_y * GetFrameTime();
+    
+    if (delta_y <= -1.0f) delta_y = -0.99f;
+    if (delta_y >= 1.0f) delta_y = 0.99f;
+    
+    cam_y += delta_y;
+    */
     
     handle_y(old_y);
     
@@ -1034,33 +1263,36 @@ int main(int argc, const char **argv) {
     
     if (IsKeyDown(KEY_Z)) {
       daytime += 0.15f * GetFrameTime();
-      daytime = MIN(daytime, 1.f);
+      while (daytime >= 1.0f) daytime -= 1.0f;
     } else if (IsKeyDown(KEY_C)) {
       daytime -= 0.15f * GetFrameTime();
-      daytime = MAX(daytime, 0.f);
+      while (daytime < 0.0f) daytime += 1.0f;
     }
     
     char buffer[100];
     
-    sprintf(buffer, "X: %.02f", vx_player.pos_x);
+    sprintf(buffer, "X: %.02f", cam_x);
     DrawText(buffer, 10, 30, 20, WHITE);
     
-    sprintf(buffer, "Y: %.02f", vx_player.pos_y);
+    sprintf(buffer, "Y: %.02f", cam_y);
     DrawText(buffer, 10, 50, 20, WHITE);
     
-    sprintf(buffer, "Z: %.02f", vx_player.pos_z);
+    sprintf(buffer, "Z: %.02f", cam_z);
     DrawText(buffer, 10, 70, 20, WHITE);
     
     sprintf(buffer, "time: %.02f", daytime);
     DrawText(buffer, 10, 90, 20, WHITE);
     
     daytime += GetFrameTime() / 1440.0f;
-    daytime = MIN(daytime, 1.f);
+    while (daytime >= 1.0f) daytime -= 1.0f;
     
     DrawFPS(10, 10);
     EndDrawing();
   }
   
+  free(world);
+  
   free(cloud_map);
+  
   CloseWindow();
 }

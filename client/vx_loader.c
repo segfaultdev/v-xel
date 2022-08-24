@@ -60,8 +60,6 @@ static void client_update(msg_Conn *conn, msg_Event event, msg_Data data) {
       } else {
         vx_client_update(packet->update.name, packet->update.pos_x, packet->update.pos_y, packet->update.pos_z);
       }
-    } else if (packet->type == vx_packet_welcome) {
-      vx_client_add(packet->welcome);
     } else if (packet->type == vx_packet_bye) {
       vx_client_remove(packet->bye);
     }
@@ -97,7 +95,7 @@ static void *loader_function(void *) {
           msg_send(connection, msg_data);
           msg_delete_data(msg_data);
           
-          printf("loading chunk (%u, %u)\n", chunk_x, chunk_z);
+          // printf("loading chunk (%u, %u)\n", chunk_x, chunk_z);
         }
       }
     }

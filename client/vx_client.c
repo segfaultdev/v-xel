@@ -48,4 +48,7 @@ void vx_client_update(const char *name, float pos_x, float pos_y, float pos_z) {
       return;
     }
   }
+  
+  vx_client_add(name);
+  vx_client_update(name, pos_x, pos_y, pos_z);
 }

@@ -18,32 +18,19 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
       printf("client '%s' connected\n", client->name);
       
       for (int i = 0; i < VX_MAX_CLIENTS; i++) {
-        if (vx_clients[i].connection == conn) continue;
-        if (!vx_clients[i].connection) continue;
-        
-        msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_welcome));
-        vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
-        
-        memcpy(response, packet, vx_packet_size(vx_packet_welcome));
-        
-        msg_send(conn, msg_data);
-        msg_delete_data(msg_data);
-      }
-      
-      for (int i = 0; i < VX_MAX_CLIENTS; i++) {
         if (!vx_clients[i].connection) continue;
         
         msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_update));
         vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
         
         response->type = vx_packet_update;
-        
         strcpy(response->update.name, client->name);
-        response->update.pos_x = (VX_TOTAL_X * VX_CHUNK_X) * 0.5f;
-        response->update.pos_y = 1.0f;
-        response->update.pos_z = (VX_TOTAL_Z * VX_CHUNK_Z) * 0.5f;
         
-        msg_send(conn, msg_data);
+        response->update.pos_x = (VX_TOTAL_X * VX_CHUNK_X * 0.5f);
+        response->update.pos_y = 1.0f;
+        response->update.pos_z = (VX_TOTAL_Z * VX_CHUNK_Z * 0.5f);
+        
+        msg_send(vx_clients[i].connection, msg_data);
         msg_delete_data(msg_data);
       }
     }

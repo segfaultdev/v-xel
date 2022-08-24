@@ -53,7 +53,7 @@ enum {
   vx_packet_request,
   vx_packet_chunk,
   vx_packet_place,
-  vx_packet_welcome, // lets the server and other clients know a client just connected
+  vx_packet_welcome,
   vx_packet_bye,     // sent server -> client, lets other clients know a client disconnected
   vx_packet_update,  // updates position of a client on server or other clients
 };

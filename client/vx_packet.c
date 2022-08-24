@@ -1,6 +1,7 @@
 #include <client.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 size_t vx_packet_size(uint16_t type) {
   if (type == vx_packet_request) {

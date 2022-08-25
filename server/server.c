@@ -101,16 +101,16 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         msg_delete_data(msg_data);
       }
     } else if (packet->type == vx_packet_chat) {
-      printf("%s: %s\n", client->name, packet->chat.data);
+      printf("%s: %s\n", client->name, packet->chat);
       
       for (int i = 0; i < VX_MAX_CLIENTS; i++) {
         if (vx_clients[i].connection == conn) continue;
         if (!vx_clients[i].connection) continue;
         
-        msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_chat) + strlen(packet->chat.data));
+        msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_chat) + strlen(packet->chat));
         vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
         
-        memcpy(response, packet, vx_packet_size(vx_packet_chat) + strlen(packet->chat.data));
+        memcpy(response, packet, vx_packet_size(vx_packet_chat) + strlen(packet->chat));
         msg_send(vx_clients[i].connection, msg_data);
         
         msg_delete_data(msg_data);

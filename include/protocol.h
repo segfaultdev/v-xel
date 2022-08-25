@@ -68,10 +68,7 @@ struct vx_packet_t {
       float pos_x, pos_y, pos_z;
     } __attribute__((packed)) update;
     
-    struct {
-      uint16_t length;
-      char data[];
-    } __attribute__((packed)) chat;
+    char chat[65536];
   };
 } __attribute__((packed));
 

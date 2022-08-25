@@ -20,6 +20,9 @@ extern char vx_name[];
 extern vx_client_t *vx_clients;
 extern int vx_client_count;
 
+extern char **vx_messages;
+extern int vx_message_count;
+
 extern vx_client_t vx_player;
 
 size_t vx_packet_size(uint16_t type);
@@ -34,5 +37,7 @@ void vx_loader_update(float pos_x, float pos_y, float pos_z);
 void vx_client_add(const char *name);
 void vx_client_remove(const char *name);
 void vx_client_update(const char *name, float pos_x, float pos_y, float pos_z);
+
+void vx_chat_add(const char *name, const char *data);
 
 #endif

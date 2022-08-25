@@ -14,7 +14,7 @@ size_t vx_packet_size(uint16_t type) {
   } else if (type == vx_packet_update) {
     return (sizeof(uint16_t) + 20 * sizeof(char) + 3 * sizeof(float));
   } else if (type == vx_packet_chat) {
-    return (sizeof(uint16_t) + sizeof(uint16_t));
+    return (sizeof(uint16_t));
   }
   
   return 0;

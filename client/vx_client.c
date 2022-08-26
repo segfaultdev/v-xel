@@ -44,7 +44,7 @@ void vx_client_update(const char *name, float pos_x, float pos_y, float pos_z) {
       vx_clients[i].pos_y = pos_y;
       vx_clients[i].pos_z = pos_z;
       
-      printf("client '%s' moved to (%.2f, %.2f, %.2f)!\n", name, pos_x, pos_y, pos_z);
+      // printf("client '%s' moved to (%.2f, %.2f, %.2f)!\n", name, pos_x, pos_y, pos_z);
       return;
     }
   }

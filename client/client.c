@@ -804,22 +804,34 @@ Color plot_pixel(float *depth, float cam_x, float cam_y, float cam_z, int scr_x,
 }
 
 void handle_collision(void) {
+  on_ground = 0;
+  
+  int tile_lo = get_world(vx_player.pos_x, vx_player.pos_y - 1.0f, vx_player.pos_z);
+  int tile_hi = get_world(vx_player.pos_x, vx_player.pos_y + 0.5f, vx_player.pos_z);
+  
+  if (tile_lo) {
+    vx_player.pos_y = (int)(vx_player.pos_y) + 1.0f;
+    if (vel_y < 0.0f) vel_y = 0.0f;
+    
+    on_ground = 1;
+  } else if (tile_hi) {
+    vx_player.pos_y = (int)(vx_player.pos_y) + 0.49f;
+    if (vel_y > 0.0f) vel_y = 0.0f;
+  }
+  
   float new_x = vx_player.pos_x;
-  float new_y = vx_player.pos_y;
   float new_z = vx_player.pos_z;
   
-  for (int y = (int)(vx_player.pos_y) - 2; y <= (int)(vx_player.pos_y) + 1; y++) {
+  for (int y = (int)(vx_player.pos_y) - 1; y <= (int)(vx_player.pos_y); y++) {
     for (int z = (int)(vx_player.pos_z) - 1; z <= (int)(vx_player.pos_z) + 1; z++) {
       for (int x = (int)(vx_player.pos_x) - 1; x <= (int)(vx_player.pos_x) + 1; x++) {
         int delta_x = x - (int)(vx_player.pos_x);
-        int delta_y = y - (int)(vx_player.pos_y);
         int delta_z = z - (int)(vx_player.pos_z);
         
         int move_x = (delta_x != 0);
-        int move_y = (delta_y != 0 && delta_y != 1);
         int move_z = (delta_z != 0);
         
-        if (move_x + move_y + move_z != 1) continue;
+        if (move_x + move_z != 1) continue;
         
         if (get_world(x, y, z)) {
           if (delta_x > 0) {
@@ -833,19 +845,12 @@ void handle_collision(void) {
           } else if (delta_z < 0) {
             new_z = MAX(new_z, z + 1.3f);
           }
-          
-          if (delta_y > 0) {
-            new_y = MIN(new_y, y - 1.3f);
-          } else if (delta_z < 0) {
-            new_y = MAX(new_y, y + 1.3f);
-          }
         }
       }
     }
   }
   
   vx_player.pos_x = new_x;
-  vx_player.pos_y = new_y;
   vx_player.pos_z = new_z;
 }
 
@@ -876,6 +881,12 @@ int main(int argc, const char **argv) {
   vx_chunk_init();
   vx_loader_init(argv[2]);
   
+  int flying = 0;
+  
+  last_x = vx_player.pos_x;
+  last_y = vx_player.pos_y;
+  last_z = vx_player.pos_z;
+  
   while (!WindowShouldClose()) {
     BeginDrawing();
     ImageClearBackground(&screen, BLACK);
@@ -887,8 +898,6 @@ int main(int argc, const char **argv) {
         screen_depths[x + y * VX_WIDTH] = 6942000.0f;
       }
     }
-    
-    handle_collision();
     
     #pragma omp parallel for
     for (uint32_t y = 0; y < VX_HEIGHT; y++) {
@@ -979,10 +988,6 @@ int main(int argc, const char **argv) {
       DrawText(vx_clients[i].name, ((int)(scr_x * VX_ZOOM) - (length / 2)) + 3, start_y * VX_ZOOM - 33, 30, WHITE);
     }
     
-    float old_x = vx_player.pos_x;
-    float old_y = vx_player.pos_y;
-    float old_z = vx_player.pos_z;
-    
     if (IsKeyDown(KEY_W)) {
       vx_player.pos_x += 10.00 * fast_sin(angle_lr) * GetFrameTime();
       vx_player.pos_z += 10.00 * fast_cos(angle_lr) * GetFrameTime();
@@ -1003,30 +1008,61 @@ int main(int argc, const char **argv) {
       angle_ud += 1.50 * GetFrameTime();
     }
     
-    if (IsKeyDown(KEY_SPACE)) {
-      vx_player.pos_y += 7.50 * GetFrameTime();
-    } else if (IsKeyDown(KEY_LEFT_SHIFT)) {
-      vx_player.pos_y -= 7.50 * GetFrameTime();
+    if (IsKeyPressed(KEY_X)) {
+      flying = !flying;
     }
     
-    /*
-    
-    if (IsKeyPressed(KEY_SPACE) && on_ground) {
-      vel_y = 10.0f;
+    if (flying) {
+      if (IsKeyDown(KEY_SPACE)) {
+        vx_player.pos_y += 7.50 * GetFrameTime();
+      } else if (IsKeyDown(KEY_LEFT_SHIFT)) {
+        vx_player.pos_y -= 7.50 * GetFrameTime();
+      }
+    } else {
+      if (IsKeyPressed(KEY_SPACE) && on_ground) {
+        vel_y = 10.0f;
+      }
+      
+      vel_y -= 20.0f * GetFrameTime();
+      
+      if (vel_y < -20.0f) vel_y = -20.0f;
+      if (vel_y > 20.0f) vel_y = 20.0f;
+      
+      float delta_y = vel_y * GetFrameTime();
+      
+      if (delta_y <= -1.0f) delta_y = -0.99f;
+      if (delta_y >= 1.0f) delta_y = 0.99f;
+      
+      vx_player.pos_y += delta_y;
     }
     
-    vel_y -= 20.0f * GetFrameTime();
-    
-    if (vel_y < -20.0f) vel_y = -20.0f;
-    if (vel_y > 20.0f) vel_y = 20.0f;
-    
-    float delta_y = vel_y * GetFrameTime();
-    
-    if (delta_y <= -1.0f) delta_y = -0.99f;
-    if (delta_y >= 1.0f) delta_y = 0.99f;
-    
-    vx_player.pos_y += delta_y;
-    */
+    {
+      float move_x = vx_player.pos_x - last_x;
+      float move_y = vx_player.pos_y - last_y;
+      float move_z = vx_player.pos_z - last_z;
+      
+      float move_dist = sqrtf(SQUARE(move_x) + SQUARE(move_y) + SQUARE(move_z));
+      
+      move_x /= move_dist;
+      move_y /= move_dist;
+      move_z /= move_dist;
+      
+      vx_player.pos_x = last_x;
+      vx_player.pos_y = last_y;
+      vx_player.pos_z = last_z;
+      
+      while (move_dist >= 0.01f) {
+        float max_move = move_dist;
+        if (max_move > 0.2f) max_move = 0.2f;
+        
+        vx_player.pos_x += move_x * max_move;
+        vx_player.pos_y += move_y * max_move;
+        vx_player.pos_z += move_z * max_move;
+        
+        handle_collision();
+        move_dist -= max_move;
+      }
+    }
     
     if (IsKeyDown(KEY_ONE)) {
       selected = 1;

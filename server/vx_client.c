@@ -22,7 +22,7 @@ vx_client_t *vx_client_join(const char *name, void *connection) {
     strcpy(vx_clients[i].name, name);
     
     vx_clients[i].pos_x = VX_TOTAL_X * VX_CHUNK_X * 0.5f;
-    vx_clients[i].pos_y = 1;
+    vx_clients[i].pos_y = 96.0f;
     vx_clients[i].pos_z = VX_TOTAL_Z * VX_CHUNK_Z * 0.5f;
     
     return (vx_clients + i);

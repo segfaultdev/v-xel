@@ -30,7 +30,7 @@ uint8_t *cloud_map = NULL;
 
 vx_client_t vx_player = (vx_client_t){
   .pos_x = 16384.0f,
-  .pos_y = 16384.0f,
+  .pos_y = 96.0f,
   .pos_z = 16384.0f,
 };
 
@@ -262,7 +262,7 @@ Color plot_shadow(float cam_x, float cam_y, float cam_z, float dir_x, float dir_
       dist = side_z - delta_z;
     }
     
-    if (pos_y < 0 || pos_y >= VX_CHUNK_Y) break;
+    if ((pos_y < 0 && step_y < 0) || (pos_y >= VX_CHUNK_Y && step_y > 0)) break;
     uint8_t tile = get_world(pos_x, pos_y, pos_z);
     
     if (tile == vx_tile_water && !get_world(pos_x, pos_y + 1, pos_z)) {
@@ -388,7 +388,7 @@ Color plot_pixel(float *depth, float cam_x, float cam_y, float cam_z, int scr_x,
       dist = side_z - delta_z;
     }
      
-    if (pos_y < 0 || pos_y >= VX_CHUNK_Y) break;
+    if ((pos_y < 0 && step_y < 0) || (pos_y >= VX_CHUNK_Y && step_y > 0)) break;
     uint8_t tile = get_world(pos_x, pos_y, pos_z);
     
     if (tile == vx_tile_water && !get_world(pos_x, pos_y + 1, pos_z)) {
@@ -808,26 +808,18 @@ void handle_collision(void) {
   float new_y = vx_player.pos_y;
   float new_z = vx_player.pos_z;
   
-  for (int y = (int)(vx_player.pos_y) - 2; y <= (int)(vx_player.pos_y) + 1; y += 3) {
-    if (!get_world((int)(vx_player.pos_x), y, (int)(vx_player.pos_z))) continue;
-    int delta_y = y - (int)(vx_player.pos_y);
-    
-    if (delta_y > 0) {
-      new_y = MIN(new_y, y - 1.3f);
-    } else if (delta_y < 0) {
-      new_y = MAX(new_y, y + 2.3f);
-    }
-  }
-  
-  for (int y = (int)(vx_player.pos_y) - 1; y <= (int)(vx_player.pos_y); y++) {
+  for (int y = (int)(vx_player.pos_y) - 2; y <= (int)(vx_player.pos_y) + 1; y++) {
     for (int z = (int)(vx_player.pos_z) - 1; z <= (int)(vx_player.pos_z) + 1; z++) {
       for (int x = (int)(vx_player.pos_x) - 1; x <= (int)(vx_player.pos_x) + 1; x++) {
         int delta_x = x - (int)(vx_player.pos_x);
         int delta_y = y - (int)(vx_player.pos_y);
         int delta_z = z - (int)(vx_player.pos_z);
         
-        if (!delta_x && !delta_z) continue;
-        if (delta_x && delta_z) continue;
+        int move_x = (delta_x != 0);
+        int move_y = (delta_y != 0 && delta_y != 1);
+        int move_z = (delta_z != 0);
+        
+        if (move_x + move_y + move_z != 1) continue;
         
         if (get_world(x, y, z)) {
           if (delta_x > 0) {
@@ -841,19 +833,14 @@ void handle_collision(void) {
           } else if (delta_z < 0) {
             new_z = MAX(new_z, z + 1.3f);
           }
+          
+          if (delta_y > 0) {
+            new_y = MIN(new_y, y - 1.3f);
+          } else if (delta_z < 0) {
+            new_y = MAX(new_y, y + 1.3f);
+          }
         }
       }
-    }
-  }
-  
-  for (int y = (int)(vx_player.pos_y) - 2; y <= (int)(vx_player.pos_y) + 1; y += 3) {
-    if (!get_world((int)(vx_player.pos_x), y, (int)(vx_player.pos_z))) continue;
-    int delta_y = y - (int)(vx_player.pos_y);
-    
-    if (delta_y > 0) {
-      new_y = MIN(new_y, y - 1.3f);
-    } else if (delta_y < 0) {
-      new_y = MAX(new_y, y + 2.3f);
     }
   }
   
@@ -1086,7 +1073,7 @@ int main(int argc, const char **argv) {
     EndDrawing();
     
     if (fast_abs(last_x - vx_player.pos_x) + fast_abs(last_y - vx_player.pos_y) + fast_abs(last_z - vx_player.pos_z) >= 0.05f) {
-      vx_loader_update(vx_player.pos_x, vx_player.pos_y, vx_player.pos_z);
+      // vx_loader_update(vx_player.pos_x, vx_player.pos_y, vx_player.pos_z);
     }
     
     last_x = vx_player.pos_x;

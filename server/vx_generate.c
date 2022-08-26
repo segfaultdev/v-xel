@@ -150,12 +150,14 @@ void vx_generate(vx_chunk_t *chunk) {
       uint32_t x = j + chunk->chunk_x * VX_CHUNK_X;
       uint32_t z = i + chunk->chunk_z * VX_CHUNK_Z;
       
-      float value_1 = eval_2(45.6f + x / 64.0f, z / 64.0f);
+      const float scale_factor = 1.2f;
+      
+      float value_1 = eval_2(45.6f + x / 64.0f, z / 64.0f) * scale_factor;
       float value_2 = roundf(value_1 * 5.0f) / 5.0f;
-      float value_3 = eval_2(x / 32.0f + value_2 * 91.1f, z / 32.0f - value_2 * 33.6f);
-      float value_4 = 1.0f - fabs(1.0f - eval_2(78.9f + z / 16.0f, x / 16.0f) * 2.0f);
-      float value_5 = eval_2(z / 32.0f, x / 32.0f);
-      float value_6 = eval_2(x / 64.0f, z / 64.0f);
+      float value_3 = eval_2(x / 32.0f + value_2 * 91.1f, z / 32.0f - value_2 * 33.6f) * scale_factor;
+      float value_4 = 1.0f - fabs(1.0f - eval_2(78.9f + z / 16.0f, x / 16.0f) * scale_factor * 2.0f);
+      float value_5 = eval_2(z / 32.0f, x / 32.0f) * scale_factor;
+      float value_6 = eval_2(x / 64.0f, z / 64.0f) * scale_factor;
       
       uint32_t height = 32.0f + floorf(80.0f * value_6 * value_6 * lerp(value_3, value_4, value_5 * value_5));
       
@@ -181,9 +183,11 @@ void vx_generate(vx_chunk_t *chunk) {
     }
   }
   
+  /*
   int count = (int)((eval_2(14.1 + chunk->chunk_x / 6.0f, 42.5 + chunk->chunk_z / 6.0f) * 4.5f) - 1.5f);
   
   for (int i = 0; i < count; i++) {
     vx_tree(chunk);
   }
+  */
 }

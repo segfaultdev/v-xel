@@ -32,7 +32,7 @@ uint8_t vx_chunk_get(uint32_t x, uint32_t y, uint32_t z) {
   
   if (chunk->chunk_x == chunk_x && chunk->chunk_z == chunk_z && chunk->loaded) {
     return chunk->data[tile_x + (tile_z + y * VX_CHUNK_Z) * VX_CHUNK_X];
-  } else if ((chunk->chunk_x != chunk_x || chunk->chunk_z != chunk_z) && !chunk->requested) {
+  } else if (!chunk->requested) {
     chunk->chunk_x = chunk_x;
     chunk->chunk_z = chunk_z;
     

@@ -26,9 +26,9 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         response->type = vx_packet_update;
         strcpy(response->update.name, client->name);
         
-        response->update.pos_x = (VX_TOTAL_X * VX_CHUNK_X * 0.5f);
-        response->update.pos_y = 1.0f;
-        response->update.pos_z = (VX_TOTAL_Z * VX_CHUNK_Z * 0.5f);
+        response->update.pos_x = client->pos_x;
+        response->update.pos_y = client->pos_y;
+        response->update.pos_z = client->pos_z;
         
         msg_send(vx_clients[i].connection, msg_data);
         msg_delete_data(msg_data);
@@ -39,6 +39,8 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
     
     if (packet->type == vx_packet_request) {
       if (packet->request[0] < VX_TOTAL_X && packet->request[1] < VX_TOTAL_Z) {
+        printf("player issued chunk (%u, %u)\n", packet->request[0], packet->request[1]);
+        
         msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_chunk));
         vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
         
@@ -47,6 +49,8 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         
         msg_send(conn, msg_data);
         msg_delete_data(msg_data);
+        
+        printf("server gave chunk\n");
       }
     } else if (packet->type == vx_packet_place) {
       if (packet->place.x < VX_TOTAL_X * VX_CHUNK_X &&
@@ -129,7 +133,7 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_bye));
         vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
         
-        response->type = vx_packet_bye;
+        response->type = vx_packet_bye; 
         strcpy(response->bye, client->name);
         
         msg_send(vx_clients[i].connection, msg_data);

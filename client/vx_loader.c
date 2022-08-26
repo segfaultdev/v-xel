@@ -81,6 +81,8 @@ static void *loader_function(void *) {
     if (loader_waiting) continue;
     if (!connection) continue;
     
+    int done = 0;
+    
     for (uint32_t z = 0; z < VX_TOTAL_SIDE; z++) {
       for (uint32_t x = 0; x < VX_TOTAL_SIDE; x++) {
         if (vx_chunks[x + z * VX_TOTAL_SIDE].requested && !vx_chunks[x + z * VX_TOTAL_SIDE].loaded) {
@@ -100,8 +102,13 @@ static void *loader_function(void *) {
           msg_delete_data(msg_data);
           
           // printf("loading chunk (%u, %u)\n", chunk_x, chunk_z);
+          
+          done = 1;
+          break;
         }
       }
+      
+      if (done) break;
     }
   }
   

@@ -42,7 +42,7 @@ vx_chunk_t *vx_chunk_load(uint32_t chunk_x, uint32_t chunk_z) {
   FILE *file = fopen(path, "rb");
   
   if (file) {
-    // printf("loading chunk (%u, %u)\n", chunk_x, chunk_z);
+    printf("loading chunk (%u, %u)\n", chunk_x, chunk_z);
     uint32_t offset = 0;
     
     while (!feof(file)) {
@@ -78,7 +78,7 @@ vx_chunk_t *vx_chunk_load(uint32_t chunk_x, uint32_t chunk_z) {
     fclose(file);
     chunk->dirty = 0;
   } else {
-    // printf("generating chunk (%u, %u)\n", chunk_x, chunk_z);
+    printf("generating chunk (%u, %u)\n", chunk_x, chunk_z);
     
     vx_generate(chunk);
     chunk->dirty = 1;
@@ -151,7 +151,7 @@ static void vx_chunk_unload_single(int index) {
 }
 
 void vx_chunk_unload(int count) {
-  // printf("unloading %d chunks out of %d\n", count, vx_loaded_count);
+  printf("unloading %d chunks out of %d\n", count, vx_loaded_count);
   
   for (int i = 0; i < count; i++) {
     vx_chunk_unload_single(i);

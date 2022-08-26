@@ -1073,7 +1073,7 @@ int main(int argc, const char **argv) {
     EndDrawing();
     
     if (fast_abs(last_x - vx_player.pos_x) + fast_abs(last_y - vx_player.pos_y) + fast_abs(last_z - vx_player.pos_z) >= 0.05f) {
-      // vx_loader_update(vx_player.pos_x, vx_player.pos_y, vx_player.pos_z);
+      vx_loader_update(vx_player.pos_x, vx_player.pos_y, vx_player.pos_z);
     }
     
     last_x = vx_player.pos_x;

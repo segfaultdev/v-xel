@@ -39,7 +39,7 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
     
     if (packet->type == vx_packet_request) {
       if (packet->request[0] < VX_TOTAL_X && packet->request[1] < VX_TOTAL_Z) {
-        printf("player issued chunk (%u, %u)\n", packet->request[0], packet->request[1]);
+        // printf("player issued chunk (%u, %u)\n", packet->request[0], packet->request[1]);
         
         msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_chunk));
         vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
@@ -49,8 +49,6 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         
         msg_send(conn, msg_data);
         msg_delete_data(msg_data);
-        
-        printf("server gave chunk\n");
       }
     } else if (packet->type == vx_packet_place) {
       if (packet->place.x < VX_TOTAL_X * VX_CHUNK_X &&
@@ -105,18 +103,19 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         msg_delete_data(msg_data);
       }
     } else if (packet->type == vx_packet_chat) {
-      printf("%s: %s\n", client->name, packet->chat);
+      printf("[%s] %s\n", client->name, packet->chat);
       
       for (int i = 0; i < VX_MAX_CLIENTS; i++) {
         if (vx_clients[i].connection == conn) continue;
         if (!vx_clients[i].connection) continue;
         
-        msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_chat) + strlen(packet->chat));
+        msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_chat) + strlen(packet->chat) + strlen(client->name) + 4);
         vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
         
-        memcpy(response, packet, vx_packet_size(vx_packet_chat) + strlen(packet->chat));
-        msg_send(vx_clients[i].connection, msg_data);
+        response->type = vx_packet_chat;
+        sprintf(response->chat, "[%s] %s", client->name, packet->chat);
         
+        msg_send(vx_clients[i].connection, msg_data);
         msg_delete_data(msg_data);
       }
     }
@@ -139,8 +138,6 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         msg_send(vx_clients[i].connection, msg_data);
         msg_delete_data(msg_data);
       }
-    } else if (event == msg_error) {
-      printf("what? %s\n", data.bytes);
     }
   }
 }

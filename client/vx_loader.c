@@ -36,6 +36,7 @@ static void client_update(msg_Conn *conn, msg_Event event, msg_Data data) {
       vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].requested = 0;
       
       loader_waiting = 0;
+      on_chunk_update(mod_x, mod_z);
     } else if (packet->type == vx_packet_place) {
       if (packet->place.y >= VX_CHUNK_Y) return;
       
@@ -52,6 +53,7 @@ static void client_update(msg_Conn *conn, msg_Event event, msg_Data data) {
           vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_z == chunk_z &&
           vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].loaded) {
         vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].data[tile_x + (tile_z + packet->place.y * VX_CHUNK_Z) * VX_CHUNK_X] = packet->place.tile;
+        on_place_update(packet->place.tile, packet->place.x, packet->place.y, packet->place.z);
       }
     } else if (packet->type == vx_packet_update) {
       if (!strcmp(packet->update.name, vx_name)) {
@@ -63,6 +65,8 @@ static void client_update(msg_Conn *conn, msg_Event event, msg_Data data) {
       }
     } else if (packet->type == vx_packet_bye) {
       vx_client_remove(packet->bye);
+    } else if (packet->type == vx_packet_chat) {
+      vx_chat_add(NULL, packet->chat);
     }
   } else if (event == msg_error) {
     vx_fatal("%s\n", msg_as_str(data));
@@ -80,6 +84,28 @@ static void *loader_function(void *) {
     
     if (loader_waiting) continue;
     if (!connection) continue;
+    
+    for (int32_t z = -VX_ITER / VX_CHUNK_Z; z <= VX_ITER / VX_CHUNK_Z; z++) {
+      for (int32_t x = -VX_ITER / VX_CHUNK_X; x <= VX_ITER / VX_CHUNK_X; x++) {
+        int32_t chunk_x = x + (int)(vx_player.pos_x / VX_CHUNK_X);
+        int32_t chunk_z = z + (int)(vx_player.pos_z / VX_CHUNK_Z);
+        
+        int32_t mod_x = chunk_x % VX_TOTAL_SIDE;
+        while (mod_x < 0) mod_x += VX_TOTAL_SIDE;
+        
+        int32_t mod_z = chunk_z % VX_TOTAL_SIDE;
+        while (mod_z < 0) mod_z += VX_TOTAL_SIDE;
+        
+        if (vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_x != chunk_x ||
+            vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_z != chunk_z) {
+          vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_x = chunk_x;
+          vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_z = chunk_z;
+          
+          vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].loaded = 0;
+          vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].requested = 1;
+        }
+      }
+    }
     
     int done = 0;
     
@@ -148,6 +174,8 @@ void vx_loader_place(uint8_t tile, uint32_t x, uint32_t y, uint32_t z) {
   
   msg_send(connection, msg_data);
   msg_delete_data(msg_data);
+  
+  on_place_update(tile, x, y, z);
 }
 
 void vx_loader_update(float pos_x, float pos_y, float pos_z) {
@@ -163,6 +191,19 @@ void vx_loader_update(float pos_x, float pos_y, float pos_z) {
   packet->update.pos_x = pos_x;
   packet->update.pos_y = pos_y;
   packet->update.pos_z = pos_z;
+  
+  msg_send(connection, msg_data);
+  msg_delete_data(msg_data);
+}
+
+void vx_loader_chat(const char *data) {
+  if (!connection) return;
+  
+  msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_chat) + strlen(data) + 1);
+  vx_packet_t *packet = msg_data.bytes;
+  
+  packet->type = vx_packet_chat;
+  strcpy(packet->chat, data);
   
   msg_send(connection, msg_data);
   msg_delete_data(msg_data);

@@ -2,9 +2,6 @@
 
 precision mediump float;
 
-#extension GL_OES_standard_derivatives : enable
-#extension GL_NV_gpu_shader5 : enable
-
 const int vx_tile_air = 0;
 const int vx_tile_water = 1;
 
@@ -44,7 +41,7 @@ layout(std430, binding=2) buffer client_data {
 };
 
 layout(std430, binding=3) buffer chunk_data { 
-  uint8_t chunk_array[];
+  uint chunk_array[];
 };
 
 uniform vec2 screen_size;
@@ -107,7 +104,9 @@ uint get_tile(uint x, uint y, uint z) {
   uint tile_z = z % 32;
   
   uint data_start = (chunk_x + chunk_z * vx_total_side) * 32 * 32 * 128;
-  return (uint)(chunk_array[data_start + (tile_x + (tile_z + y * 32) * 32)]);
+  uint index = data_start + (tile_x + (tile_z + y * 32) * 32);
+  
+  return (chunk_array[index / 4] >> (8 * (index % 4))) & 255;
 }
 
 vec3 get_color(uint tile) {
@@ -161,7 +160,7 @@ vec3 get_color(uint tile) {
     color = ivec3(223, 23, 223);
   }
   
-  return vec3((float)(color.x) / 255.0, (float)(color.y) / 255.0, (float)(color.z) / 255.0);
+  return vec3(color.x / 255.0, color.y / 255.0, color.z / 255.0);
 }
 
 bool is_solid(uint x, uint y, uint z) {
@@ -170,7 +169,7 @@ bool is_solid(uint x, uint y, uint z) {
 }
 
 float plot_shadow(vec3 start, vec3 ray) {
-  uvec3 position = uvec3((uint)(start.x), (uint)(start.y), (uint)(start.z));
+  uvec3 position = uvec3(floor(start.x), floor(start.y), floor(start.z));
   
   vec3 side = vec3(0.0, 0.0, 0.0);
   vec3 delta = abs(vec3(1.0, 1.0, 1.0) / ray);
@@ -238,11 +237,11 @@ float plot_shadow(vec3 start, vec3 ray) {
     
     if (tile == vx_tile_leaves) {
       if (hit_side == 0) {
-        if (in_leaves((hit.y - (int)(hit.y)) * 16.0, (hit.z - (int)(hit.z)) * 16.0)) continue;
+        if (in_leaves((hit.y - floor(hit.y)) * 16.0, (hit.z - floor(hit.z)) * 16.0)) continue;
       } else if (hit_side == 1) {
-        if (in_leaves((hit.z - (int)(hit.z)) * 16.0, (hit.x - (int)(hit.x)) * 16.0)) continue;
+        if (in_leaves((hit.z - floor(hit.z)) * 16.0, (hit.x - floor(hit.x)) * 16.0)) continue;
       } else if (hit_side == 2) {
-        if (in_leaves((hit.x - (int)(hit.x)) * 16.0, (hit.y - (int)(hit.y)) * 16.0)) continue;
+        if (in_leaves((hit.x - floor(hit.x)) * 16.0, (hit.y - floor(hit.y)) * 16.0)) continue;
       }
       
       return 0.5;
@@ -273,7 +272,7 @@ float plot_shadow(vec3 start, vec3 ray) {
 }
 
 vec4 plot_pixel(vec3 start, vec3 ray) {
-  uvec3 position = uvec3((uint)(start.x), (uint)(start.y), (uint)(start.z));
+  uvec3 position = uvec3(floor(start.x), floor(start.y), floor(start.z));
   
   vec3 side = vec3(0.0, 0.0, 0.0);
   vec3 delta = abs(vec3(1.0, 1.0, 1.0) / ray);
@@ -351,19 +350,19 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
       
       if (hit_side == 0) {
         if (get_tile(position.x, position.y - 1, position.z) != tile) {
-          border_dist = min(border_dist, hit.y - (int)(hit.y));
+          border_dist = min(border_dist, hit.y - floor(hit.y));
         }
         
         if (get_tile(position.x, position.y + 1, position.z) != tile) {
-          border_dist = min(border_dist, 1.0 - (hit.y - (int)(hit.y)));
+          border_dist = min(border_dist, 1.0 - (hit.y - floor(hit.y)));
         }
         
         if (get_tile(position.x, position.y, position.z - 1) != tile) {
-          border_dist = min(border_dist, hit.z - (int)(hit.z));
+          border_dist = min(border_dist, hit.z - floor(hit.z));
         }
         
         if (get_tile(position.x, position.y, position.z + 1) != tile) {
-          border_dist = min(border_dist, 1.0 - (hit.z - (int)(hit.z)));
+          border_dist = min(border_dist, 1.0 - (hit.z - floor(hit.z)));
         }
         
         if (get_tile(position.x - step.x, position.y, position.z) == tile) {
@@ -371,19 +370,19 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
         }
       } else if (hit_side == 1) {
         if (get_tile(position.x - 1, position.y, position.z) != tile) {
-          border_dist = min(border_dist, hit.x - (int)(hit.x));
+          border_dist = min(border_dist, hit.x - floor(hit.x));
         }
         
         if (get_tile(position.x + 1, position.y, position.z) != tile) {
-          border_dist = min(border_dist, 1.0 - (hit.x - (int)(hit.x)));
+          border_dist = min(border_dist, 1.0 - (hit.x - floor(hit.x)));
         }
         
         if (get_tile(position.x, position.y, position.z - 1) != tile) {
-          border_dist = min(border_dist, hit.z - (int)(hit.z));
+          border_dist = min(border_dist, hit.z - floor(hit.z));
         }
         
         if (get_tile(position.x, position.y, position.z + 1) != tile) {
-          border_dist = min(border_dist, 1.0 - (hit.z - (int)(hit.z)));
+          border_dist = min(border_dist, 1.0 - (hit.z - floor(hit.z)));
         }
         
         if (get_tile(position.x, position.y - step.y, position.z) == tile) {
@@ -391,19 +390,19 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
         }
       } else if (hit_side == 2) {
         if (get_tile(position.x - 1, position.y, position.z) != tile) {
-          border_dist = min(border_dist, hit.x - (int)(hit.x));
+          border_dist = min(border_dist, hit.x - floor(hit.x));
         }
         
         if (get_tile(position.x + 1, position.y, position.z) != tile) {
-          border_dist = min(border_dist, 1.0 - (hit.x - (int)(hit.x)));
+          border_dist = min(border_dist, 1.0 - (hit.x - floor(hit.x)));
         }
         
         if (get_tile(position.x, position.y - 1, position.z) != tile) {
-          border_dist = min(border_dist, hit.y - (int)(hit.y));
+          border_dist = min(border_dist, hit.y - floor(hit.y));
         }
         
         if (get_tile(position.x, position.y + 1, position.z) != tile) {
-          border_dist = min(border_dist, 1.0 - (hit.y - (int)(hit.y)));
+          border_dist = min(border_dist, 1.0 - (hit.y - floor(hit.y)));
         }
         
         if (get_tile(position.x, position.y, position.z - step.z) == tile) {
@@ -413,51 +412,51 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
       
       if (hit_side == 0) {
         if (is_solid(position.x - step.x, position.y - 1, position.z)) {
-          border_dist = min(border_dist, hit.y - (int)(hit.y));
+          border_dist = min(border_dist, hit.y - floor(hit.y));
         }
         
         if (is_solid(position.x - step.x, position.y + 1, position.z)) {
-          border_dist = min(border_dist, 1.0 - (hit.y - (int)(hit.y)));
+          border_dist = min(border_dist, 1.0 - (hit.y - floor(hit.y)));
         }
         
         if (is_solid(position.x - step.x, position.y, position.z - 1)) {
-          border_dist = min(border_dist, hit.z - (int)(hit.z));
+          border_dist = min(border_dist, hit.z - floor(hit.z));
         }
         
         if (is_solid(position.x - step.x, position.y, position.z + 1)) {
-          border_dist = min(border_dist, 1.0 - (hit.z - (int)(hit.z)));
+          border_dist = min(border_dist, 1.0 - (hit.z - floor(hit.z)));
         }
       } else if (hit_side == 1) {
         if (is_solid(position.x - 1, position.y - step.y, position.z)) {
-          border_dist = min(border_dist, hit.x - (int)(hit.x));
+          border_dist = min(border_dist, hit.x - floor(hit.x));
         }
         
         if (is_solid(position.x + 1, position.y - step.y, position.z)) {
-          border_dist = min(border_dist, 1.0 - (hit.x - (int)(hit.x)));
+          border_dist = min(border_dist, 1.0 - (hit.x - floor(hit.x)));
         }
         
         if (is_solid(position.x, position.y - step.y, position.z - 1)) {
-          border_dist = min(border_dist, hit.z - (int)(hit.z));
+          border_dist = min(border_dist, hit.z - floor(hit.z));
         }
         
         if (is_solid(position.x, position.y - step.y, position.z + 1)) {
-          border_dist = min(border_dist, 1.0 - (hit.z - (int)(hit.z)));
+          border_dist = min(border_dist, 1.0 - (hit.z - floor(hit.z)));
         }
       } else if (hit_side == 2) {
         if (is_solid(position.x - 1, position.y, position.z - step.z)) {
-          border_dist = min(border_dist, hit.x - (int)(hit.x));
+          border_dist = min(border_dist, hit.x - floor(hit.x));
         }
         
         if (is_solid(position.x + 1, position.y, position.z - step.z)) {
-          border_dist = min(border_dist, 1.0 - (hit.x - (int)(hit.x)));
+          border_dist = min(border_dist, 1.0 - (hit.x - floor(hit.x)));
         }
         
         if (is_solid(position.x, position.y - 1, position.z - step.z)) {
-          border_dist = min(border_dist, hit.y - (int)(hit.y));
+          border_dist = min(border_dist, hit.y - floor(hit.y));
         }
         
         if (is_solid(position.x, position.y + 1, position.z - step.z)) {
-          border_dist = min(border_dist, 1.0 - (hit.y - (int)(hit.y)));
+          border_dist = min(border_dist, 1.0 - (hit.y - floor(hit.y)));
         }
       }
       
@@ -472,99 +471,99 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
       
       if (hit_side == 0) {
         if (is_solid(position.x - step.x, position.y - 1, position.z)) {
-          ambient_dist = min(ambient_dist, hit.y - (int)(hit.y));
+          ambient_dist = min(ambient_dist, hit.y - floor(hit.y));
         }
         
         if (is_solid(position.x - step.x, position.y + 1, position.z)) {
-          ambient_dist = min(ambient_dist, 1.0 - (hit.y - (int)(hit.y)));
+          ambient_dist = min(ambient_dist, 1.0 - (hit.y - floor(hit.y)));
         }
         
         if (is_solid(position.x - step.x, position.y, position.z - 1)) {
-          ambient_dist = min(ambient_dist, hit.z - (int)(hit.z));
+          ambient_dist = min(ambient_dist, hit.z - floor(hit.z));
         }
         
         if (is_solid(position.x - step.x, position.y, position.z + 1)) {
-          ambient_dist = min(ambient_dist, 1.0 - (hit.z - (int)(hit.z)));
+          ambient_dist = min(ambient_dist, 1.0 - (hit.z - floor(hit.z)));
         }
         
         if (is_solid(position.x - step.x, position.y - 1, position.z - 1)) {
-          ambient_dist = min(ambient_dist, sqrt(square(hit.y - (int)(hit.y)) + square(hit.z - (int)(hit.z))));
+          ambient_dist = min(ambient_dist, sqrt(square(hit.y - floor(hit.y)) + square(hit.z - floor(hit.z))));
         }
         
         if (is_solid(position.x - step.x, position.y + 1, position.z - 1)) {
-          ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.y - (int)(hit.y))) + square(hit.z - (int)(hit.z))));
+          ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.y - floor(hit.y))) + square(hit.z - floor(hit.z))));
         }
         
         if (is_solid(position.x - step.x, position.y - 1, position.z + 1)) {
-          ambient_dist = min(ambient_dist, sqrt(square(hit.y - (int)(hit.y)) + square(1.0 - (hit.z - (int)(hit.z)))));
+          ambient_dist = min(ambient_dist, sqrt(square(hit.y - floor(hit.y)) + square(1.0 - (hit.z - floor(hit.z)))));
         }
         
         if (is_solid(position.x - step.x, position.y + 1, position.z + 1)) {
-          ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.y - (int)(hit.y))) + square(1.0 - (hit.z - (int)(hit.z)))));
+          ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.y - floor(hit.y))) + square(1.0 - (hit.z - floor(hit.z)))));
         }
       } else if (hit_side == 1) {
         if (is_solid(position.x - 1, position.y - step.y, position.z)) {
-          ambient_dist = min(ambient_dist, hit.x - (int)(hit.x));
+          ambient_dist = min(ambient_dist, hit.x - floor(hit.x));
         }
         
         if (is_solid(position.x + 1, position.y - step.y, position.z)) {
-          ambient_dist = min(ambient_dist, 1.0 - (hit.x - (int)(hit.x)));
+          ambient_dist = min(ambient_dist, 1.0 - (hit.x - floor(hit.x)));
         }
         
         if (is_solid(position.x, position.y - step.y, position.z - 1)) {
-          ambient_dist = min(ambient_dist, hit.z - (int)(hit.z));
+          ambient_dist = min(ambient_dist, hit.z - floor(hit.z));
         }
         
         if (is_solid(position.x, position.y - step.y, position.z + 1)) {
-          ambient_dist = min(ambient_dist, 1.0 - (hit.z - (int)(hit.z)));
+          ambient_dist = min(ambient_dist, 1.0 - (hit.z - floor(hit.z)));
         }
         
         if (is_solid(position.x - 1, position.y - step.y, position.z - 1)) {
-          ambient_dist = min(ambient_dist, sqrt(square(hit.x - (int)(hit.x)) + square(hit.z - (int)(hit.z))));
+          ambient_dist = min(ambient_dist, sqrt(square(hit.x - floor(hit.x)) + square(hit.z - floor(hit.z))));
         }
         
         if (is_solid(position.x + 1, position.y - step.y, position.z - 1)) {
-          ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.x - (int)(hit.x))) + square(hit.z - (int)(hit.z))));
+          ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.x - floor(hit.x))) + square(hit.z - floor(hit.z))));
         }
         
         if (is_solid(position.x - 1, position.y - step.y, position.z + 1)) {
-          ambient_dist = min(ambient_dist, sqrt(square(hit.x - (int)(hit.x)) + square(1.0 - (hit.z - (int)(hit.z)))));
+          ambient_dist = min(ambient_dist, sqrt(square(hit.x - floor(hit.x)) + square(1.0 - (hit.z - floor(hit.z)))));
         }
         
         if (is_solid(position.x + 1, position.y - step.y, position.z + 1)) {
-          ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.x - (int)(hit.x))) + square(1.0 - (hit.z - (int)(hit.z)))));
+          ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.x - floor(hit.x))) + square(1.0 - (hit.z - floor(hit.z)))));
         }
       } else if (hit_side == 2) {
         if (is_solid(position.x - 1, position.y, position.z - step.z)) {
-          ambient_dist = min(ambient_dist, hit.x - (int)(hit.x));
+          ambient_dist = min(ambient_dist, hit.x - floor(hit.x));
         }
         
         if (is_solid(position.x + 1, position.y, position.z - step.z)) {
-          ambient_dist = min(ambient_dist, 1.0 - (hit.x - (int)(hit.x)));
+          ambient_dist = min(ambient_dist, 1.0 - (hit.x - floor(hit.x)));
         }
         
         if (is_solid(position.x, position.y - 1, position.z - step.z)) {
-          ambient_dist = min(ambient_dist, hit.y - (int)(hit.y));
+          ambient_dist = min(ambient_dist, hit.y - floor(hit.y));
         }
         
         if (is_solid(position.x, position.y + 1, position.z - step.z)) {
-          ambient_dist = min(ambient_dist, 1.0 - (hit.y - (int)(hit.y)));
+          ambient_dist = min(ambient_dist, 1.0 - (hit.y - floor(hit.y)));
         }
         
         if (is_solid(position.x - 1, position.y - 1, position.z - step.z)) {
-          ambient_dist = min(ambient_dist, sqrt(square(hit.x - (int)(hit.x)) + square(hit.y - (int)(hit.y))));
+          ambient_dist = min(ambient_dist, sqrt(square(hit.x - floor(hit.x)) + square(hit.y - floor(hit.y))));
         }
         
         if (is_solid(position.x + 1, position.y - 1, position.z - step.z)) {
-          ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.x - (int)(hit.x))) + square(hit.y - (int)(hit.y))));
+          ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.x - floor(hit.x))) + square(hit.y - floor(hit.y))));
         }
         
         if (is_solid(position.x - 1, position.y + 1, position.z - step.z)) {
-          ambient_dist = min(ambient_dist, sqrt(square(hit.x - (int)(hit.x)) + square(1.0 - (hit.y - (int)(hit.y)))));
+          ambient_dist = min(ambient_dist, sqrt(square(hit.x - floor(hit.x)) + square(1.0 - (hit.y - floor(hit.y)))));
         }
         
         if (is_solid(position.x + 1, position.y + 1, position.z - step.z)) {
-          ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.x - (int)(hit.x))) + square(1.0 - (hit.y - (int)(hit.y)))));
+          ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.x - floor(hit.x))) + square(1.0 - (hit.y - floor(hit.y)))));
         }
       }
       
@@ -639,7 +638,7 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
         start = new_start;
         ray = vec3(hit_side == 0 ? -new_ray.x : new_ray.x, hit_side == 1 ? -new_ray.y : new_ray.y, hit_side == 2 ? -new_ray.z : new_ray.z);
         
-        position = uvec3((uint)(start.x), (uint)(start.y), (uint)(start.z));
+        position = uvec3(floor(start.x), floor(start.y), floor(start.z));
         
         side = vec3(0.0, 0.0, 0.0);
         delta = abs(vec3(1.0, 1.0, 1.0) / ray);
@@ -672,14 +671,14 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
         color_left /= 2.0;
         final_color += color * color_left;
         
-        i += (int)(vx_iterations * 0.2f);
+        i += vx_iterations / 5;
       } else if (tile == vx_tile_leaves) {
         if (hit_side == 0) {
-          if (in_leaves((hit.y - (int)(hit.y)) * 16.0, (hit.z - (int)(hit.z)) * 16.0)) continue;
+          if (in_leaves((hit.y - floor(hit.y)) * 16.0, (hit.z - floor(hit.z)) * 16.0)) continue;
         } else if (hit_side == 1) {
-          if (in_leaves((hit.z - (int)(hit.z)) * 16.0, (hit.x - (int)(hit.x)) * 16.0)) continue;
+          if (in_leaves((hit.z - floor(hit.z)) * 16.0, (hit.x - floor(hit.x)) * 16.0)) continue;
         } else if (hit_side == 2) {
-          if (in_leaves((hit.x - (int)(hit.x)) * 16.0, (hit.y - (int)(hit.y)) * 16.0)) continue;
+          if (in_leaves((hit.x - floor(hit.x)) * 16.0, (hit.y - floor(hit.y)) * 16.0)) continue;
         }
         
         final_color += color * color_left;
@@ -850,9 +849,9 @@ void main() {
     }
   }
   
-  if ((int)(gl_FragCoord.x) == (int)(screen_size.x / 2.0) && abs((int)(gl_FragCoord.y) - (int)(screen_size.y / 2.0)) < 6) {
+  if (floor(gl_FragCoord.x) == floor(screen_size.x / 2.0) && abs(floor(gl_FragCoord.y) - floor(screen_size.y / 2.0)) < 6) {
     color = vec3(1.0, 1.0, 1.0) - color;
-  } else if ((int)(gl_FragCoord.y) == (int)(screen_size.y / 2.0) && abs((int)(gl_FragCoord.x) - (int)(screen_size.x / 2.0)) < 6) {
+  } else if (floor(gl_FragCoord.y) == floor(screen_size.y / 2.0) && abs(floor(gl_FragCoord.x) - floor(screen_size.x / 2.0)) < 6) {
     color = vec3(1.0, 1.0, 1.0) - color;
   }
   

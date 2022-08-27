@@ -3,6 +3,9 @@
 #include <stdint.h>
 #include <math.h>
 
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+
 uint32_t seed_3a = 1;
 uint32_t seed_3b = 1;
 uint32_t seed_3c = 1;
@@ -235,6 +238,126 @@ static float magic_function(float x) {
   return x * x * x * 3.85f;
 }
 
+int vx_house(vx_chunk_t *chunk) {
+  uint32_t x, y, z;
+
+  const int floor_height = 4;
+
+  uint32_t floors = rand() % (VX_CHUNK_Y / floor_height) + 1;
+  uint32_t height = floors * floor_height;
+  height = height >= VX_CHUNK_Y ? VX_CHUNK_Y - 1 : height;
+  uint32_t width = 8 + (rand() % VX_CHUNK_X);
+  width = width >= VX_CHUNK_X ? VX_CHUNK_X - 1 : width;
+
+  int attempt;
+  for (attempt = 0; attempt < 10; attempt++) {
+    x = (rand() % (VX_CHUNK_X - width));
+    z = (rand() % (VX_CHUNK_Z - width));
+    y = 0;
+    
+    for(uint32_t i = 0; i < width; i++) {
+      for(uint32_t j = 0; j < width; j++) {
+        if(get_chunk_tile(chunk, x + i, y, z + j) == vx_tile_air || get_chunk_tile(chunk, x + i, y, z + j) == vx_tile_water) {
+          goto next_attempt;
+        }
+      }
+    }
+    break;
+  next_attempt: ;
+  }
+  if (attempt == 10) return 0;
+
+  if (x + width >= VX_CHUNK_X) return 0;
+  if (z + width >= VX_CHUNK_Z) return 0;
+  if (y + height >= VX_CHUNK_Y) return 0;
+
+  int materials[] = {
+    vx_tile_red_bricks,
+    vx_tile_gray_bricks,
+    vx_tile_black_block,
+    vx_tile_white_block,
+    vx_tile_yellow_block,
+  };
+
+  int material = materials[rand() % (sizeof(materials) / sizeof(int))];
+  int is_sep_windows = rand() % 2 == 0 ? 1 : 0;
+  int is_full_windows = rand() % 2 == 0 ? 1 : 0;
+
+  int safe_height = height;
+  /* Fill the walls with the material */
+  if(rand() % 2 == 0) {
+    int wood_tile = rand() % 3 == 0 ? vx_tile_wood : rand() % 4 == 0 ? vx_tile_light_wood : vx_tile_dark_wood;
+    /* Blocky walls */
+    for(uint32_t j = 0; j < height; j++) {
+      if(j >= safe_height && rand() % MAX(1, safe_height / 4) == 0) {
+        goto skip_filler;
+      }
+      
+      if(j % floor_height == floor_height - 2 || j == 0) {
+        /* Filler */
+        for(uint32_t k = 1; k < width; k++) {
+          for(uint32_t l = 1; l < width; l++) {
+            if(j >= safe_height && rand() % safe_height == 0) {
+              continue;
+            }
+            set_chunk_tile(chunk, wood_tile, x + k, y + j, z + l);
+          }
+        }
+      }
+    
+    skip_filler:
+      for(uint32_t i = 0; i < width + 1; i++) {
+        int curr_material = material;
+        /* Windows with water */
+        if(j % floor_height == 0 && j) {
+          if(is_sep_windows && i % 2 == 0 && i) {
+            curr_material = vx_tile_glass;
+          } else if(!is_sep_windows) {
+            curr_material = vx_tile_glass;
+          }
+        } else if(is_full_windows && j % floor_height != 0 && j % floor_height != floor_height - 2) {
+          if(is_sep_windows && i % 2 == 0 && i) {
+            curr_material = vx_tile_glass;
+          } else if(!is_sep_windows) {
+            curr_material = vx_tile_glass;
+          }
+        }
+
+        if(curr_material == vx_tile_glass) {
+          if(j >= safe_height && rand() % MAX(1, safe_height / 5) == 0) {
+            continue;
+          }
+        } else {
+          if(j >= safe_height && rand() % MAX(1, safe_height) == 0) {
+            continue;
+          }
+
+          /* Can't put foundation on air */
+          if(j) {
+            if(get_chunk_tile(chunk, x + i, y + j - 1, z) == vx_tile_air
+            || get_chunk_tile(chunk, x, y + j - 1, z + i) == vx_tile_air
+            || get_chunk_tile(chunk, x + i, y + j - 1, z + width) == vx_tile_air
+            || get_chunk_tile(chunk, x + width, y + j - 1, z + i) == vx_tile_air) {
+              continue;
+            }
+          }
+        }
+
+        set_chunk_tile(chunk, curr_material, x + i, y + j, z);
+        set_chunk_tile(chunk, curr_material, x, y + j, z + i);
+        set_chunk_tile(chunk, curr_material, x + i, y + j, z + width);
+        set_chunk_tile(chunk, curr_material, x + width, y + j, z + i);
+      }
+
+      safe_height--;
+      if(!safe_height) safe_height = 1;
+    }
+  } else {
+    /* TODO: Circular walls */
+  }
+  return 1;
+}
+
 void vx_generate(vx_chunk_t *chunk) {
   for (uint32_t i = 0; i < VX_CHUNK_Z; i++) {
     for (uint32_t j = 0; j < VX_CHUNK_X; j++) {
@@ -274,14 +397,15 @@ void vx_generate(vx_chunk_t *chunk) {
       }
     }
   }
-  
-  float tree_x = ((chunk->chunk_x + 0.5f) * VX_CHUNK_X) / 64.0f;
-  float tree_z = ((chunk->chunk_z + 0.5f) * VX_CHUNK_Z) / 64.0f;
-  
-  float value = eval_2(tree_x, tree_z);
-  
-  int count = (int)(magic_function(value) * 64.0f - eval_2(tree_z + 55.17f, tree_x - 3.13f) * 12.0f);
-  
+
+  int count;
+  count = rand_3() % 40 != 0 ? 0 : 1;
+  for (int i = 0; i < count; i++) {
+    if(vx_house(chunk))
+      break;
+  }
+
+  count = (int)((eval_2(14.1 + chunk->chunk_x / 6.0f, 42.5 + chunk->chunk_z / 6.0f) * 4.5f) - 1.5f);
   for (int i = 0; i < count; i++) {
     vx_tree(chunk);
   }

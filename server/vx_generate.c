@@ -188,7 +188,16 @@ int vx_house(vx_chunk_t *chunk) {
   if (y + height >= VX_CHUNK_Y) return 0;
 
   int materials[] = {
-    vx_white
+    vx_tile_black_block,
+    vx_tile_white_block,
+    vx_tile_red_block,
+    vx_tile_orange_block,
+    vx_tile_yellow_block,
+    vx_tile_green_block,
+    vx_tile_cyan_block,
+    vx_tile_blue_block,
+    vx_tile_purple_block,
+    vx_tile_magenta_block,
   };
 
   int material = materials[rand() % (sizeof(materials) / sizeof(int))];
@@ -218,7 +227,7 @@ int vx_house(vx_chunk_t *chunk) {
         /* Windows with water */
         if(i % 2 == 0 && i) {
           if(j % floor_height == 0 && j) {
-            int glass_material = (rand_seize != 1024 && rand() % rand_seize != 0) ? vx_tile_air : vx_tile_water;
+            int glass_material = (rand_seize != 1024 && rand() % rand_seize != 0) ? vx_tile_air : vx_tile_glass;
             chunk->data[x + i + (z + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = glass_material;
             chunk->data[x + (z + i + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = glass_material;
             chunk->data[x + i + (z + width + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = glass_material;

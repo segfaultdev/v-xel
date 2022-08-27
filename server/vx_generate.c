@@ -144,6 +144,102 @@ void vx_tree(vx_chunk_t *chunk) {
   }
 }
 
+int vx_house(vx_chunk_t *chunk) {
+  uint32_t x, y, z;
+
+  const int floor_height = 4;
+
+  uint32_t floors = rand() % (VX_CHUNK_Y / floor_height) + 1;
+  uint32_t height = floors * floor_height;
+  height = height >= VX_CHUNK_Y ? VX_CHUNK_Y - 1 : height;
+  uint32_t width = 8 + (rand() % VX_CHUNK_X);
+  width = width >= VX_CHUNK_X ? VX_CHUNK_X - 1 : width;
+
+  int attempt;
+  for (attempt = 0; attempt < 10; attempt++) {
+    x = (rand() % (VX_CHUNK_X - width));
+    z = (rand() % (VX_CHUNK_Z - width));
+    y = 0;
+    
+    for(uint32_t i = 0; i < width; i++) {
+      for(uint32_t j = 0; j < width; j++) {
+        if(chunk->data[x + i + (z + j + y * VX_CHUNK_Z) * VX_CHUNK_X] == vx_tile_air) {
+          goto next_attempt;
+        }
+      }
+    }
+    break;
+  next_attempt: ;
+  }
+  if (attempt == 10) return 0;
+
+  if (x + width >= VX_CHUNK_X) return 0;
+  if (z + width >= VX_CHUNK_Z) return 0;
+  if (y + height >= VX_CHUNK_Y) return 0;
+
+  int materials[] = {
+    vx_white
+  };
+
+  int material = materials[rand() % (sizeof(materials) / sizeof(int))];
+
+  uint32_t secure_height = (rand() % height);
+  secure_height = secure_height > (height / 3) ? height / 3 : secure_height;
+
+  /* Fill the walls with the material */
+  if(rand() % 2 == 0) {
+    /* Blocky walls */
+    for(uint32_t i = 0; i < width; i++) {
+      int rand_seize = 1024;
+      for(uint32_t j = 0; j < height; j++) {
+        if(j > secure_height) {
+          if(rand() % rand_seize == 0) {
+            break;
+          }
+          rand_seize -= (rand_seize / 4);
+          rand_seize = rand_seize ? rand_seize : 1;
+        }
+
+        chunk->data[x + i + (z + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = material;
+        chunk->data[x + (z + i + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = material;
+        chunk->data[x + i + (z + width + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = material;
+        chunk->data[x + width + (z + i + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = material;
+
+        /* Windows with water */
+        if(i % 2 == 0 && i) {
+          if(j % floor_height == 0 && j) {
+            int glass_material = (rand_seize != 1024 && rand() % rand_seize != 0) ? vx_tile_air : vx_tile_water;
+            chunk->data[x + i + (z + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = glass_material;
+            chunk->data[x + (z + i + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = glass_material;
+            chunk->data[x + i + (z + width + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = glass_material;
+            chunk->data[x + width + (z + i + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = glass_material;
+          }
+        }
+      }
+    }
+
+    /* Filler */
+    for(uint32_t i = 1; i < width - 1; i++) {
+      for(uint32_t j = 1; j < width - 1; j++) {
+        int rand_seize = 512;
+        for(uint32_t k = 0; k < height; k++) {
+          if(k > secure_height) {
+            if(rand() % rand_seize == 0) {
+              break;
+            }
+            rand_seize -= (rand_seize / 2);
+            rand_seize = rand_seize ? rand_seize : 1;
+          }
+          chunk->data[x + i + (z + j + (y + k) * VX_CHUNK_Z) * VX_CHUNK_X] = vx_tile_grass;
+        }
+      }
+    }
+  } else {
+    /* TODO: Circular walls */
+  }
+  return 1;
+}
+
 void vx_generate(vx_chunk_t *chunk) {
   for (uint32_t i = 0; i < VX_CHUNK_Z; i++) {
     for (uint32_t j = 0; j < VX_CHUNK_X; j++) {
@@ -183,11 +279,8 @@ void vx_generate(vx_chunk_t *chunk) {
     }
   }
   
-  /*
   int count = (int)((eval_2(14.1 + chunk->chunk_x / 6.0f, 42.5 + chunk->chunk_z / 6.0f) * 4.5f) - 1.5f);
-  
   for (int i = 0; i < count; i++) {
     vx_tree(chunk);
   }
-  */
 }

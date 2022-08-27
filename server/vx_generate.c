@@ -104,9 +104,15 @@ static float eval_2(float x, float y) {
   }
 }
 
+static uint8_t get_chunk_tile(vx_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z) {
+  return chunk->data[x + (z + y * VX_CHUNK_Z) * VX_CHUNK_X];
+}
+
+static void set_chunk_tile(vx_chunk_t *chunk, uint8_t tile, uint32_t x, uint32_t y, uint32_t z) {
+  chunk->data[x + (z + y * VX_CHUNK_Z) * VX_CHUNK_X] = tile;
+}
+
 void vx_tree(vx_chunk_t *chunk) {
-  uint32_t length = 4 + (rand_3() % 6);
-  
   uint32_t x, y, z;
   int attempt;
   
@@ -115,32 +121,107 @@ void vx_tree(vx_chunk_t *chunk) {
     z = (rand_3() % (VX_CHUNK_Z - 4)) + 2;
     y = 1;
     
-    while (y < VX_CHUNK_Y - 20 && chunk->data[x + (z + y * VX_CHUNK_Z) * VX_CHUNK_X] != vx_tile_air) {
+    while (y < VX_CHUNK_Y - 20 && get_chunk_tile(chunk, x, y, z) != vx_tile_air) {
       y++;
     }
     
-    if (chunk->data[x + (z + (y - 1) * VX_CHUNK_Z) * VX_CHUNK_X] == vx_tile_grass ||
-        chunk->data[x + (z + (y - 1) * VX_CHUNK_Z) * VX_CHUNK_X] == vx_tile_sand) {
+    if (get_chunk_tile(chunk, x, y - 1, z) == vx_tile_grass || get_chunk_tile(chunk, x, y - 1, z) == vx_tile_sand) {
       break;
     }
   }
   
-  if (chunk->data[x + (z + (y - 1) * VX_CHUNK_Z) * VX_CHUNK_X] == vx_tile_sand) return;
   if (attempt == 12) return;
+  int variant = 0;
   
-  for (int i = 0; i < length; i++) {
-    chunk->data[x + (z + (y + i) * VX_CHUNK_Z) * VX_CHUNK_X] = vx_tile_trunk;
+  if (get_chunk_tile(chunk, x, y - 1, z) == vx_tile_sand) {
+    if (rand_3() % 8 == 0 && x >= 4 && z >= 4 && x < VX_CHUNK_X - 5 && z < VX_CHUNK_Z - 5) {
+      variant = 2;
+    } else {
+      return;
+    }
   }
   
-  for (int i = -2; i <= 2; i++) {
-    for (int j = -2; j <= 1; j++) {
-      for (int k = -2; k <= 2; k++) {
-        if (i * i + j * j + k * k > 5) {
-          continue;
+  if (variant == 0 && y >= 64 && rand_3() % 2 == 0 && x >= 3 && z >= 3 && x < VX_CHUNK_X - 4 && z < VX_CHUNK_Z - 4) {
+    variant = 1;
+  }
+  
+  // 0 = unbranded tree uwu
+  // 1 = pine tree
+  // 2 = palm tree
+  
+  if (variant == 0) {
+    int length = 4 + (rand_3() % 6);
+    
+    for (int i = 0; i < length; i++) {
+      set_chunk_tile(chunk, vx_tile_trunk, x, y + i, z);
+    }
+    
+    for (int i = -2; i <= 2; i++) {
+      for (int j = -2; j <= 1; j++) {
+        for (int k = -2; k <= 2; k++) {
+          if (i * i + j * j + k * k > 5) continue;
+          
+          if (get_chunk_tile(chunk, x + k, y + (length - 1) + j, z + i) == vx_tile_air) {
+            set_chunk_tile(chunk, vx_tile_leaves, x + k, y + (length - 1) + j, z + i);
+          }
         }
+      }
+    }
+  } else if (variant == 1) {
+    int length = 10 + (rand_3() % 6);
+    
+    for (int i = 0; i < length; i++) {
+      set_chunk_tile(chunk, vx_tile_trunk, x, y + i, z);
+    }
+    
+    for (int i = -3; i <= 3; i++) {
+      for (int j = 0; j <= 8; j++) {
+        for (int k = -3; k <= 3; k++) {
+          if (j % 2 || i * i + k * k >= (3.5f - j / 3.0f) * (3.5f - j / 3.0f)) {
+            continue;
+          }
+          
+          if (get_chunk_tile(chunk, x + k, y + (length - 1) + j - 7, z + i) == vx_tile_air) {
+            set_chunk_tile(chunk, vx_tile_leaves, x + k, y + (length - 1) + j - 7, z + i);
+          }
+        }
+      }
+    }
+  } else if (variant == 2) {
+    int length = 4 + (rand_3() % 4);
+    
+    float angle = 2.0f * 3.14159f * (fabs(rand_3() % 65537) / 65537.0f);
+    
+    float pos_x = x + 0.5f;
+    float pos_z = z + 0.5f;
+    
+    float delta_x = 0.0f;
+    float delta_z = 0.0f;
+    
+    float accel_x = cosf(angle) * 0.067f;
+    float accel_z = sinf(angle) * 0.067f;
+    
+    for (int i = 0; i < length; i++) {
+      pos_x += delta_x;
+      pos_z += delta_z;
+      
+      delta_x += accel_x;
+      delta_z += accel_z;
+      
+      set_chunk_tile(chunk, vx_tile_trunk, (int)(pos_x), y + i, (int)(pos_z));
+    }
+    
+    for (int i = -3; i <= 3; i++) {
+      for (int k = -3; k <= 3; k++) {
+        if (i && k) continue;
         
-        if (chunk->data[(x + k) + ((z + i) + (y + (length - 1) + j) * VX_CHUNK_Z) * VX_CHUNK_X] == vx_tile_air) {
-          chunk->data[(x + k) + ((z + i) + (y + (length - 1) + j) * VX_CHUNK_Z) * VX_CHUNK_X] = vx_tile_leaves;
+        int d = i + k;
+        if (d < 0) d = -d;
+        
+        int j = -((d - 0) * (d - 3)) / 2;
+        
+        if (get_chunk_tile(chunk, (int)(pos_x) + k, y + length + j, (int)(pos_z) + i) == vx_tile_air) {
+          set_chunk_tile(chunk, vx_tile_leaves, (int)(pos_x) + k, y + length + j, (int)(pos_z) + i);
         }
       }
     }

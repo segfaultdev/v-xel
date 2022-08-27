@@ -225,7 +225,7 @@ int main(int argc, const char **argv) {
   
   srand(time(0));
   
-  SetTraceLogLevel(LOG_NONE);
+  SetTraceLogLevel(LOG_WARNING);
   SetTargetFPS(60);
   
   SetExitKey(KEY_NULL);
@@ -380,7 +380,7 @@ int main(int argc, const char **argv) {
       }
       
       SetShaderValue(shader, GetShaderLocation(shader, "mouse_pos"), mouse_pos, SHADER_UNIFORM_IVEC3);
-      SetShaderValue(shader, GetShaderLocation(shader, "mouse_step"), mouse_step, SHADER_UNIFORM_IVEC3);
+      // SetShaderValue(shader, GetShaderLocation(shader, "mouse_step"), mouse_step, SHADER_UNIFORM_IVEC3);
       SetShaderValue(shader, GetShaderLocation(shader, "mouse_side"), &mouse_side, SHADER_UNIFORM_INT);
     }
     

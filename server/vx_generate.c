@@ -3,6 +3,9 @@
 #include <stdint.h>
 #include <math.h>
 
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+
 uint32_t seed_3a = 1;
 uint32_t seed_3b = 1;
 uint32_t seed_3c = 1;
@@ -254,7 +257,7 @@ int vx_house(vx_chunk_t *chunk) {
     
     for(uint32_t i = 0; i < width; i++) {
       for(uint32_t j = 0; j < width; j++) {
-        if(chunk->data[x + i + (z + j + y * VX_CHUNK_Z) * VX_CHUNK_X] == vx_tile_air) {
+        if(get_chunk_tile(chunk, x + i, y, z + j) == vx_tile_air || get_chunk_tile(chunk, x + i, y, z + j) == vx_tile_water) {
           goto next_attempt;
         }
       }
@@ -269,70 +272,85 @@ int vx_house(vx_chunk_t *chunk) {
   if (y + height >= VX_CHUNK_Y) return 0;
 
   int materials[] = {
+    vx_tile_red_bricks,
+    vx_tile_gray_bricks,
     vx_tile_black_block,
     vx_tile_white_block,
-    vx_tile_red_block,
-    vx_tile_orange_block,
     vx_tile_yellow_block,
-    vx_tile_green_block,
-    vx_tile_cyan_block,
-    vx_tile_blue_block,
-    vx_tile_purple_block,
-    vx_tile_magenta_block,
   };
 
   int material = materials[rand() % (sizeof(materials) / sizeof(int))];
+  int is_sep_windows = rand() % 2 == 0 ? 1 : 0;
+  int is_full_windows = rand() % 2 == 0 ? 1 : 0;
 
-  uint32_t secure_height = (rand() % height);
-  secure_height = secure_height > (height / 3) ? height / 3 : secure_height;
-
+  int safe_height = height;
   /* Fill the walls with the material */
   if(rand() % 2 == 0) {
+    int wood_tile = rand() % 3 == 0 ? vx_tile_wood : rand() % 4 == 0 ? vx_tile_light_wood : vx_tile_dark_wood;
     /* Blocky walls */
-    for(uint32_t i = 0; i < width; i++) {
-      int rand_seize = 1024;
-      for(uint32_t j = 0; j < height; j++) {
-        if(j > secure_height) {
-          if(rand() % rand_seize == 0) {
-            break;
-          }
-          rand_seize -= (rand_seize / 4);
-          rand_seize = rand_seize ? rand_seize : 1;
-        }
-
-        chunk->data[x + i + (z + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = material;
-        chunk->data[x + (z + i + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = material;
-        chunk->data[x + i + (z + width + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = material;
-        chunk->data[x + width + (z + i + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = material;
-
-        /* Windows with water */
-        if(i % 2 == 0 && i) {
-          if(j % floor_height == 0 && j) {
-            int glass_material = (rand_seize != 1024 && rand() % rand_seize != 0) ? vx_tile_air : vx_tile_glass;
-            chunk->data[x + i + (z + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = glass_material;
-            chunk->data[x + (z + i + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = glass_material;
-            chunk->data[x + i + (z + width + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = glass_material;
-            chunk->data[x + width + (z + i + (y + j) * VX_CHUNK_Z) * VX_CHUNK_X] = glass_material;
-          }
-        }
+    for(uint32_t j = 0; j < height; j++) {
+      if(j >= safe_height && rand() % MAX(1, safe_height / 4) == 0) {
+        goto skip_filler;
       }
-    }
-
-    /* Filler */
-    for(uint32_t i = 1; i < width - 1; i++) {
-      for(uint32_t j = 1; j < width - 1; j++) {
-        int rand_seize = 512;
-        for(uint32_t k = 0; k < height; k++) {
-          if(k > secure_height) {
-            if(rand() % rand_seize == 0) {
-              break;
+      
+      if(j % floor_height == floor_height - 2 || j == 0) {
+        /* Filler */
+        for(uint32_t k = 1; k < width; k++) {
+          for(uint32_t l = 1; l < width; l++) {
+            if(j >= safe_height && rand() % safe_height == 0) {
+              continue;
             }
-            rand_seize -= (rand_seize / 2);
-            rand_seize = rand_seize ? rand_seize : 1;
+            set_chunk_tile(chunk, wood_tile, x + k, y + j, z + l);
           }
-          chunk->data[x + i + (z + j + (y + k) * VX_CHUNK_Z) * VX_CHUNK_X] = vx_tile_grass;
         }
       }
+    
+    skip_filler:
+      for(uint32_t i = 0; i < width + 1; i++) {
+        int curr_material = material;
+        /* Windows with water */
+        if(j % floor_height == 0 && j) {
+          if(is_sep_windows && i % 2 == 0 && i) {
+            curr_material = vx_tile_glass;
+          } else if(!is_sep_windows) {
+            curr_material = vx_tile_glass;
+          }
+        } else if(is_full_windows && j % floor_height != 0 && j % floor_height != floor_height - 2) {
+          if(is_sep_windows && i % 2 == 0 && i) {
+            curr_material = vx_tile_glass;
+          } else if(!is_sep_windows) {
+            curr_material = vx_tile_glass;
+          }
+        }
+
+        if(curr_material == vx_tile_glass) {
+          if(j >= safe_height && rand() % MAX(1, safe_height / 5) == 0) {
+            continue;
+          }
+        } else {
+          if(j >= safe_height && rand() % MAX(1, safe_height) == 0) {
+            continue;
+          }
+
+          /* Can't put foundation on air */
+          if(j) {
+            if(get_chunk_tile(chunk, x + i, y + j - 1, z) == vx_tile_air
+            || get_chunk_tile(chunk, x, y + j - 1, z + i) == vx_tile_air
+            || get_chunk_tile(chunk, x + i, y + j - 1, z + width) == vx_tile_air
+            || get_chunk_tile(chunk, x + width, y + j - 1, z + i) == vx_tile_air) {
+              continue;
+            }
+          }
+        }
+
+        set_chunk_tile(chunk, curr_material, x + i, y + j, z);
+        set_chunk_tile(chunk, curr_material, x, y + j, z + i);
+        set_chunk_tile(chunk, curr_material, x + i, y + j, z + width);
+        set_chunk_tile(chunk, curr_material, x + width, y + j, z + i);
+      }
+
+      safe_height--;
+      if(!safe_height) safe_height = 1;
     }
   } else {
     /* TODO: Circular walls */
@@ -381,9 +399,10 @@ void vx_generate(vx_chunk_t *chunk) {
   }
 
   int count;
-  count = (int)((eval_2(14.1 + chunk->chunk_x / 6.0f, 42.5 + chunk->chunk_z / 6.0f) * 2.5f) - 1.5f);
+  count = rand_3() % 40 != 0 ? 0 : 1;
   for (int i = 0; i < count; i++) {
-    vx_house(chunk);
+    if(vx_house(chunk))
+      break;
   }
 
   count = (int)((eval_2(14.1 + chunk->chunk_x / 6.0f, 42.5 + chunk->chunk_z / 6.0f) * 4.5f) - 1.5f);

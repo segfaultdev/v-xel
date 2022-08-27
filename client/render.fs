@@ -63,6 +63,8 @@ uniform int vx_iterations;
 uniform int vx_total_side;
 uniform int vx_max_clients;
 
+out vec4 finalColor;
+
 float square(float x) {
   return x * x;
 }
@@ -861,5 +863,5 @@ void main() {
     }
   }
   
-  gl_FragColor = vec4(overlay_color.xyz * overlay_color.w + color.xyz * (1.0 - overlay_color.w), 1.0);
+  finalColor = vec4(overlay_color.xyz * overlay_color.w + color.xyz * (1.0 - overlay_color.w), 1.0);
 }

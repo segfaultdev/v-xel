@@ -4,8 +4,7 @@
 #include <protocol.h>
 #include <stdint.h>
 
-#define VX_MAX_CHUNKS  64
-#define VX_MAX_CLIENTS 32
+#define VX_MAX_CHUNKS 64
 
 #define VX_TOTAL_X 1024
 #define VX_TOTAL_Z 1024

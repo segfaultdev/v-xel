@@ -105,25 +105,28 @@ static float eval_2(float x, float y) {
 }
 
 void vx_tree(vx_chunk_t *chunk) {
+  uint32_t length = 4 + (rand_3() % 6);
+  
   uint32_t x, y, z;
   int attempt;
   
-  for (attempt = 0; attempt < 10; attempt++) {
+  for (attempt = 0; attempt < 12; attempt++) {
     x = (rand_3() % (VX_CHUNK_X - 4)) + 2;
     z = (rand_3() % (VX_CHUNK_Z - 4)) + 2;
     y = 1;
     
-    while (chunk->data[x + (z + y * VX_CHUNK_Z) * VX_CHUNK_X]) {
+    while (y < VX_CHUNK_Y - 20 && chunk->data[x + (z + y * VX_CHUNK_Z) * VX_CHUNK_X] != vx_tile_air) {
       y++;
     }
     
-    if (chunk->data[x + (z + (y - 1) * VX_CHUNK_Z) * VX_CHUNK_X] == vx_tile_grass) {
+    if (chunk->data[x + (z + (y - 1) * VX_CHUNK_Z) * VX_CHUNK_X] == vx_tile_grass ||
+        chunk->data[x + (z + (y - 1) * VX_CHUNK_Z) * VX_CHUNK_X] == vx_tile_sand) {
       break;
     }
   }
   
-  if (attempt == 10) return;
-  uint32_t length = 4 + (rand_3() % 3);
+  if (chunk->data[x + (z + (y - 1) * VX_CHUNK_Z) * VX_CHUNK_X] == vx_tile_sand) return;
+  if (attempt == 12) return;
   
   for (int i = 0; i < length; i++) {
     chunk->data[x + (z + (y + i) * VX_CHUNK_Z) * VX_CHUNK_X] = vx_tile_trunk;
@@ -144,13 +147,20 @@ void vx_tree(vx_chunk_t *chunk) {
   }
 }
 
+static float magic_function(float x) {
+  x = x - 0.125f;
+  x = cosf(x) * cosf(x) - 0.4f;
+  
+  return x * x * x * 3.85f;
+}
+
 void vx_generate(vx_chunk_t *chunk) {
   for (uint32_t i = 0; i < VX_CHUNK_Z; i++) {
     for (uint32_t j = 0; j < VX_CHUNK_X; j++) {
       uint32_t x = j + chunk->chunk_x * VX_CHUNK_X;
       uint32_t z = i + chunk->chunk_z * VX_CHUNK_Z;
       
-      const float scale_factor = 1.2f;
+      const float scale_factor = 1.075f;
       
       float value_1 = eval_2(45.6f + x / 64.0f, z / 64.0f) * scale_factor;
       float value_2 = roundf(value_1 * 5.0f) / 5.0f;
@@ -158,21 +168,22 @@ void vx_generate(vx_chunk_t *chunk) {
       float value_4 = 1.0f - fabs(1.0f - eval_2(78.9f + z / 16.0f, x / 16.0f) * scale_factor * 2.0f);
       float value_5 = eval_2(z / 32.0f, x / 32.0f) * scale_factor;
       float value_6 = eval_2(x / 64.0f, z / 64.0f) * scale_factor;
+      float value_7 = eval_2(z / 20.0f, x / 20.0f) * scale_factor;
       
       uint32_t height = 32.0f + floorf(80.0f * value_6 * value_6 * lerp(value_3, value_4, value_5 * value_5));
       
       for (uint32_t y = 0; y <= height && y < VX_CHUNK_Y; y++) {
-        if (y < height - 6) {
+        if (y < height - roundf(lerp(8.0f, 2.0f, height / 114.0f))) {
           chunk->data[j + (i + y * VX_CHUNK_Z) * VX_CHUNK_X] = vx_tile_stone;
         } else if (height < 38) {
           if (y <= height) {
             chunk->data[j + (i + y * VX_CHUNK_Z) * VX_CHUNK_X] = vx_tile_sand;
           }
         } else {
-          if (y < height) {
-            chunk->data[j + (i + y * VX_CHUNK_Z) * VX_CHUNK_X] = vx_tile_dirt;
-          } else if (y == height) {
+          if (y == height && y < 80.0f + value_7 * 48.0f) {
             chunk->data[j + (i + y * VX_CHUNK_Z) * VX_CHUNK_X] = vx_tile_grass;
+          } else if (y < height) {
+            chunk->data[j + (i + y * VX_CHUNK_Z) * VX_CHUNK_X] = vx_tile_dirt;
           }
         }
       }
@@ -183,11 +194,14 @@ void vx_generate(vx_chunk_t *chunk) {
     }
   }
   
-  /*
-  int count = (int)((eval_2(14.1 + chunk->chunk_x / 6.0f, 42.5 + chunk->chunk_z / 6.0f) * 4.5f) - 1.5f);
+  float tree_x = ((chunk->chunk_x + 0.5f) * VX_CHUNK_X) / 64.0f;
+  float tree_z = ((chunk->chunk_z + 0.5f) * VX_CHUNK_Z) / 64.0f;
+  
+  float value = eval_2(tree_x, tree_z);
+  
+  int count = (int)(magic_function(value) * 64.0f - eval_2(tree_z + 55.17f, tree_x - 3.13f) * 12.0f);
   
   for (int i = 0; i < count; i++) {
     vx_tree(chunk);
   }
-  */
 }

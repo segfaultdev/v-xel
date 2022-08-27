@@ -41,10 +41,19 @@ float angle_ud = 0;
 
 float daytime = 0.25f;
 
-GLuint ssbo;
+GLuint chunk_ssbo;
+GLuint client_ssbo;
+
 uint8_t sent[VX_TOTAL_SIDE * VX_TOTAL_SIDE];
 
+int has_sent_size = 0;
+int has_sent_angle = 0;
+int has_sent_camera = 0;
+int has_sent_clients = 0;
+int has_sent_selected = 0;
+
 uint8_t get_world(uint32_t x, uint32_t y, uint32_t z) {
+  if (y >= 1048576) return vx_tile_stone;
   return vx_chunk_get(x, y, z);
 }
 
@@ -57,7 +66,6 @@ void set_world(uint8_t value, uint32_t x, uint32_t y, uint32_t z) {
   uint32_t chunk_x = (x / VX_CHUNK_X) % VX_TOTAL_SIDE;
   uint32_t chunk_z = (z / VX_CHUNK_Z) % VX_TOTAL_SIDE;
   
-  sent[chunk_x + chunk_z * VX_TOTAL_SIDE] = 0;
   vx_loader_place(value, x, y, z);
 }
 
@@ -218,6 +226,9 @@ int main(int argc, const char **argv) {
   srand(time(0));
   
   SetTraceLogLevel(LOG_NONE);
+  SetTargetFPS(60);
+  
+  SetExitKey(KEY_NULL);
   
   Shader shader = LoadShader(0, "render.fs");
   int flying = 0;
@@ -226,24 +237,35 @@ int main(int argc, const char **argv) {
   last_y = vx_player.pos_y;
   last_z = vx_player.pos_z;
   
-  int has_sent_size = 0;
-  int has_sent_angle = 0;
-  int has_sent_camera = 0;
-  
   int shader_vx_iterations = VX_ITER;
   int shader_vx_total_side = VX_TOTAL_SIDE;
+  int shader_vx_max_clients = VX_MAX_CLIENTS;
   
   int selected = 1;
   int paused = 0;
+  int in_chat = 0;
+  
+  int was_paused = 0;
   
   SetShaderValue(shader, GetShaderLocation(shader, "vx_iterations"), &shader_vx_iterations, SHADER_UNIFORM_INT);
   SetShaderValue(shader, GetShaderLocation(shader, "vx_total_side"), &shader_vx_total_side, SHADER_UNIFORM_INT);
+  SetShaderValue(shader, GetShaderLocation(shader, "vx_max_clients"), &shader_vx_max_clients, SHADER_UNIFORM_INT);
   
-  glGenBuffers(1, &ssbo);
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+  GLuint ssbos[2];
+  glGenBuffers(2, ssbos);
+  
+  client_ssbo = ssbos[0];
+  chunk_ssbo = ssbos[1];
+  
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, client_ssbo);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * 3 * VX_MAX_CLIENTS, NULL, GL_DYNAMIC_DRAW);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, client_ssbo);
+  
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunk_ssbo);
   glBufferData(GL_SHADER_STORAGE_BUFFER, VX_CHUNK_X * VX_CHUNK_Z * VX_CHUNK_Y * VX_TOTAL_SIDE * VX_TOTAL_SIDE, NULL, GL_DYNAMIC_DRAW);
-  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssbo);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, chunk_ssbo);
   
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
   DisableCursor();
   
   vx_chunk_init();
@@ -254,6 +276,11 @@ int main(int argc, const char **argv) {
   }
   
   RenderTexture2D target;
+  
+  char current_message[1024];
+  int current_length = 0;
+  
+  float blank_start = GetTime();
   
   while (!WindowShouldClose()) {
     if (IsWindowResized()) {
@@ -291,9 +318,16 @@ int main(int argc, const char **argv) {
       has_sent_camera = 1;
     }
     
+    if (!has_sent_selected) {
+      SetShaderValue(shader, GetShaderLocation(shader, "selected"), &selected, SHADER_UNIFORM_INT);
+      has_sent_selected = 1;
+    }
+    
     for (int i = 0; i < VX_TOTAL_SIDE; i++) {
       for (int j = 0; j < VX_TOTAL_SIDE; j++) {
         if (!sent[j + i * VX_TOTAL_SIDE] && vx_chunks[j + i * VX_TOTAL_SIDE].loaded) {
+          glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunk_ssbo);
+          
           glBufferSubData(
             GL_SHADER_STORAGE_BUFFER,
             (j + i * VX_TOTAL_SIDE) * VX_CHUNK_X * VX_CHUNK_Z * VX_CHUNK_Y,
@@ -301,6 +335,7 @@ int main(int argc, const char **argv) {
             vx_chunks[j + i * VX_TOTAL_SIDE].data
           );
           
+          glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
           sent[j + i * VX_TOTAL_SIDE] = 1;
         }
       }
@@ -349,6 +384,33 @@ int main(int argc, const char **argv) {
       SetShaderValue(shader, GetShaderLocation(shader, "mouse_side"), &mouse_side, SHADER_UNIFORM_INT);
     }
     
+    if (!has_sent_clients) {
+      glBindBuffer(GL_SHADER_STORAGE_BUFFER, client_ssbo);
+      float client_array[3 * VX_MAX_CLIENTS];
+      
+      for (int i = 0; i < VX_MAX_CLIENTS; i++) {
+        if (i >= vx_client_count) {
+          client_array[0 + 3 * i] = -1.0f;
+          client_array[1 + 3 * i] = -1.0f;
+          client_array[2 + 3 * i] = -1.0f;
+        } else if (vx_clients) {
+          client_array[0 + 3 * i] = vx_clients[i].pos_x;
+          client_array[1 + 3 * i] = vx_clients[i].pos_y;
+          client_array[2 + 3 * i] = vx_clients[i].pos_z;
+        }
+      }
+      
+      glBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        sizeof(float) * 3 * VX_MAX_CLIENTS,
+        client_array
+      );
+      
+      glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+      has_sent_clients = 1;
+    }
+    
     BeginTextureMode(target);
     BeginShaderMode(shader);
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), WHITE);
@@ -366,18 +428,111 @@ int main(int argc, const char **argv) {
       WHITE
     );
     
+    float ratio_y = (float)(VX_HEIGHT) / VX_WIDTH;
+    
+    for (int i = 0; i < vx_client_count; i++) {
+      float rel_x = vx_clients[i].pos_x - vx_player.pos_x;
+      float rel_y = vx_clients[i].pos_y - vx_player.pos_y;
+      float rel_z = vx_clients[i].pos_z - vx_player.pos_z;
+      
+      float dir_x;
+      float dir_y;
+      float dir_z;
+      
+      dir_x = rel_x * cosf(angle_lr) - rel_z * sinf(angle_lr);
+      dir_y = rel_y;
+      dir_z = rel_z * cosf(angle_lr) + rel_x * sinf(angle_lr);
+      
+      rel_x = dir_x;
+      rel_y = dir_y;
+      rel_z = dir_z;
+      
+      dir_x = rel_x;
+      dir_y = rel_y * cosf(angle_ud) + rel_z * sinf(angle_ud);
+      dir_z = rel_z * cosf(angle_ud) - rel_y * sinf(angle_ud);
+      
+      if (dir_z < 0.0f) continue;
+      
+      dir_x /= dir_z;
+      dir_y /= dir_z;
+      
+      float scr_x = ((dir_x + 1.0f) / 2.0f) * GetScreenWidth();
+      float scr_y = (((-dir_y / ratio_y) + 1.0f) / 2.0f) * GetScreenHeight();
+      
+      float scale = (GetScreenWidth() * 0.25f) / dir_z;
+      
+      int start_x = scr_x - scale;
+      int end_x = scr_x + scale;
+      
+      int start_y = scr_y - scale;
+      int end_y = scr_y + scale * 3.0f;
+      
+      int length = MeasureText(vx_clients[i].name, 30) + 6;
+      
+      DrawRectangle((int)(scr_x) - (length / 2), start_y - 40, length, 36, (Color){0, 0, 0, 127});
+      DrawText(vx_clients[i].name, ((int)(scr_x) - (length / 2)) + 3, start_y - 33, 30, WHITE);
+    }
+    
+    for (int i = vx_message_count - 1; i >= 0; i--) {
+      int index = (vx_message_count - 1) - i;
+      
+      int alpha = 255 - index * 32;
+      if (in_chat) alpha = 255;
+      
+      if (alpha <= 0) break;
+      
+      int y_start = GetScreenHeight() - ((index + 1) * 24 + 32);
+      int length = MeasureText(vx_messages[i], 20) + 4;
+      
+      DrawRectangle(0, y_start, length, 24, (Color){0, 0, 0, alpha * 0.5f});
+      DrawText(vx_messages[i], 2, y_start + 2, 20, (Color){255, 255, 255, alpha});
+    }
+    
     if (paused) {
-      DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 127});
-    } else {
+      if (in_chat) {
+        current_message[current_length] = '\0';
+        
+        DrawRectangle(0, GetScreenHeight() - 24, GetScreenWidth() - 32 * VX_ZOOM, 24, (Color){0, 0, 0, 127});
+        DrawText(current_message, 2, GetScreenHeight() - 22, 20, WHITE);
+        
+        if ((int)((GetTime() - blank_start) * 3.0f) % 2 == 0) {
+          DrawRectangle(4 + MeasureText(current_message, 20), GetScreenHeight() - 22, 2, 20, WHITE);
+        }
+        
+        if (IsKeyPressed(KEY_ENTER)) {
+          vx_loader_chat(current_message);
+          vx_chat_add(vx_name, current_message);
+          
+          paused = 0;
+          in_chat = 0;
+          
+          DisableCursor();
+        } else if (IsKeyPressed(KEY_BACKSPACE)) {
+          if (current_length) current_length--;
+        }
+        
+        for (;;) {
+          char chr = GetCharPressed();
+          if (!chr) break;
+          
+          current_message[current_length++] = chr;
+          blank_start = GetTime();
+        }
+      } else {
+        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 127});
+      }
+      
+      was_paused = 1;
+    } else if (!paused) {
       float mouse_delta_x = GetMouseDelta().x;
       float mouse_delta_y = GetMouseDelta().y;
       
-      if (fast_abs(mouse_delta_x) > 0.01f) {
+      if (!was_paused && fast_abs(mouse_delta_x) > 0.01f) {
         angle_lr += mouse_delta_x * 0.0033f;
         has_sent_angle = 0;
       }
       
-      if (fast_abs(mouse_delta_y) > 0.01f) {
+      if (!was_paused && fast_abs(mouse_delta_y) > 0.01f) {
         angle_ud += mouse_delta_y * 0.0033f;
         
         if (angle_ud < -PI / 2.0f) angle_ud = -PI / 2.0f;
@@ -389,13 +544,19 @@ int main(int argc, const char **argv) {
       if (IsKeyDown(KEY_W)) {
         vx_player.pos_x += 10.00 * sinf(angle_lr) * GetFrameTime();
         vx_player.pos_z += 10.00 * cosf(angle_lr) * GetFrameTime();
-      } else if (IsKeyDown(KEY_S)) {
+      }
+      
+      if (IsKeyDown(KEY_S)) {
         vx_player.pos_x -= 10.00 * sinf(angle_lr) * GetFrameTime();
         vx_player.pos_z -= 10.00 * cosf(angle_lr) * GetFrameTime();
-      } else if (IsKeyDown(KEY_A)) {
+      }
+      
+      if (IsKeyDown(KEY_A)) {
         vx_player.pos_x -= 10.00 * sinf(angle_lr + PI / 2.0f) * GetFrameTime();
         vx_player.pos_z -= 10.00 * cosf(angle_lr + PI / 2.0f) * GetFrameTime();
-      } else if (IsKeyDown(KEY_D)) {
+      }
+      
+      if (IsKeyDown(KEY_D)) {
         vx_player.pos_x += 10.00 * sinf(angle_lr + PI / 2.0f) * GetFrameTime();
         vx_player.pos_z += 10.00 * cosf(angle_lr + PI / 2.0f) * GetFrameTime();
       }
@@ -414,40 +575,16 @@ int main(int argc, const char **argv) {
         if (IsKeyPressed(KEY_SPACE) && on_ground) {
           vel_y = 10.0f;
         }
-        
-        vel_y -= 20.0f * GetFrameTime();
-        
-        if (vel_y < -20.0f) vel_y = -20.0f;
-        if (vel_y > 20.0f) vel_y = 20.0f;
-        
-        float delta_y = vel_y * GetFrameTime();
-        
-        if (delta_y <= -1.0f) delta_y = -0.99f;
-        if (delta_y >= 1.0f) delta_y = 0.99f;
-        
-        vx_player.pos_y += delta_y;
       }
       
-      if (IsKeyDown(KEY_ONE)) {
-        selected = 1;
-      } else if (IsKeyDown(KEY_TWO)) {
-        selected = 2;
-      } else if (IsKeyDown(KEY_THREE)) {
-        selected = 3;
-      } else if (IsKeyDown(KEY_FOUR)) {
-        selected = 4;
-      } else if (IsKeyDown(KEY_FIVE)) {
-        selected = 5;
-      } else if (IsKeyDown(KEY_SIX)) {
-        selected = 6;
-      } else if (IsKeyDown(KEY_SEVEN)) {
-        selected = 7;
-      } else if (IsKeyDown(KEY_EIGHT)) {
-        selected = 8;
-      } else if (IsKeyDown(KEY_NINE)) {
-        selected = 9;
-      } else if (IsKeyDown(KEY_ZERO)) {
-        selected = 10;
+      if (fast_abs(GetMouseWheelMove()) > 0.01f) {
+        if (GetMouseWheelMove() < 0.0f) {
+          selected = (((selected - 1) + 1) % (vx_tile_count - 1)) + 1;
+        } else {
+          selected = (((selected - 1) + (vx_tile_count - 2)) % (vx_tile_count - 1)) + 1;
+        }
+        
+        has_sent_selected = 0;
       }
       
       if (IsKeyDown(KEY_Z)) {
@@ -457,13 +594,41 @@ int main(int argc, const char **argv) {
         daytime -= 0.15f * GetFrameTime();
         while (daytime < 0.0f) daytime += 1.0f;
       }
+      
+      if (IsKeyPressed(KEY_T)) {
+        current_length = 0;
+        blank_start = GetTime();
+        
+        paused = 1;
+        in_chat = 1;
+        
+        EnableCursor();
+      }
+      
+      was_paused = 0;
     }
     
-    if (IsKeyPressed(KEY_Q)) {
+    if (!flying) {
+      vel_y -= 20.0f * GetFrameTime();
+      
+      if (vel_y < -20.0f) vel_y = -20.0f;
+      if (vel_y > 20.0f) vel_y = 20.0f;
+      
+      float delta_y = vel_y * GetFrameTime();
+      
+      if (delta_y <= -1.0f) delta_y = -0.99f;
+      if (delta_y >= 1.0f) delta_y = 0.99f;
+      
+      vx_player.pos_y += delta_y;
+    }
+    
+    if (IsKeyPressed(KEY_ESCAPE)) {
       paused = !paused;
       
       if (paused) EnableCursor();
       else DisableCursor();
+      
+      if (!paused) in_chat = 0;
     }
     
     float move_x = vx_player.pos_x - last_x;
@@ -524,4 +689,26 @@ int main(int argc, const char **argv) {
 
 void on_chunk_update(uint32_t chunk_x, uint32_t chunk_z) {
   sent[chunk_x + chunk_z * VX_TOTAL_SIDE] = 0;
+}
+
+void on_place_update(uint8_t tile, uint32_t x, uint32_t y, uint32_t z) {
+  uint32_t chunk_x = (x / 32) % VX_TOTAL_SIDE;
+  uint32_t chunk_z = (z / 32) % VX_TOTAL_SIDE;
+  
+  uint32_t tile_x = x % 32;
+  uint32_t tile_z = z % 32;
+  
+  uint32_t data_start = (chunk_x + chunk_z * VX_TOTAL_SIDE) * 32 * 32 * 128;
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunk_ssbo);
+  
+  glBufferSubData(
+    GL_SHADER_STORAGE_BUFFER,
+    data_start + (tile_x + (tile_z + y * 32) * 32),
+    1,
+    &tile
+  );
+}
+
+void on_client_update(void) {
+  has_sent_clients = 0;
 }

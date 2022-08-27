@@ -10,6 +10,8 @@
 #define VX_CHUNK_Y 128
 #define VX_CHUNK_Z 32
 
+#define VX_MAX_CLIENTS 32
+
 #define vx_fatal(...) do {printf("error: " __VA_ARGS__); exit(1);} while (0)
 
 enum {
@@ -24,6 +26,23 @@ enum {
   vx_tile_trunk,
   vx_tile_leaves,
   vx_tile_wood,
+  vx_tile_light_wood,
+  vx_tile_dark_wood,
+  
+  vx_tile_red_bricks,
+  vx_tile_gray_bricks,
+  vx_tile_glass,
+  
+  vx_tile_black_block,
+  vx_tile_white_block,
+  vx_tile_red_block,
+  vx_tile_orange_block,
+  vx_tile_yellow_block,
+  vx_tile_green_block,
+  vx_tile_cyan_block,
+  vx_tile_blue_block,
+  vx_tile_purple_block,
+  vx_tile_magenta_block,
   
   vx_tile_count,
 };

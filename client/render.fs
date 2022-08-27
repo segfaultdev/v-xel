@@ -16,11 +16,32 @@ const int vx_tile_sand = 5;
 const int vx_tile_trunk = 6;
 const int vx_tile_leaves = 7;
 const int vx_tile_wood = 8;
+const int vx_tile_light_wood = 9;
+const int vx_tile_dark_wood = 10;
+
+const int vx_tile_red_bricks = 11;
+const int vx_tile_gray_bricks = 12;
+const int vx_tile_glass = 13;
+
+const int vx_tile_black_block = 14;
+const int vx_tile_white_block = 15;
+const int vx_tile_red_block = 16;
+const int vx_tile_orange_block = 17;
+const int vx_tile_yellow_block = 18;
+const int vx_tile_green_block = 19;
+const int vx_tile_cyan_block = 20;
+const int vx_tile_blue_block = 21;
+const int vx_tile_purple_block = 22;
+const int vx_tile_magenta_block = 23;
 
 const float PI = 3.14159265;
 const float E = 2.71828;
 
 const int vx_cloud_side = 512;
+
+layout(std430, binding=2) buffer client_data {
+  float client_array[];
+};
 
 layout(std430, binding=3) buffer chunk_data { 
   uint8_t chunk_array[];
@@ -39,12 +60,11 @@ uniform ivec3 mouse_pos;
 uniform ivec3 mouse_step;
 uniform int mouse_side;
 
+uniform int selected;
+
 uniform int vx_iterations;
 uniform int vx_total_side;
-
-uint32_t seed_3a = 1;
-uint32_t seed_3b = 1;
-uint32_t seed_3c = 1;
+uniform int vx_max_clients;
 
 float square(float x) {
   return x * x;
@@ -54,34 +74,6 @@ vec2 rotate(vec2 vector, float angle) {
   return vec2(vector.x * cos(angle) - vector.y * sin(angle), vector.x * sin(angle) + vector.y * cos(angle));
 }
 
-uint32_t rand_3() {
-  seed_3a = (seed_3a * 1664525 + 1013904223) % 1431655765;
-  seed_3b = (seed_3b * 16843019 + 826366249) % 1431655765;
-  seed_3c = (seed_3c * 16843031 + 826366237) % 1431655765;
-  
-  return seed_3a + seed_3b + seed_3c;
-}
-
-float grad_2(int x, int y) {
-  x %= 8;
-  y %= 16;
-  
-  while (x < 0) x += 8;
-  while (y < 0) y += 16;
-  
-  seed_3a = (x * 1664525 + 1013904223) % 1431655765;
-  seed_3b = (y * 16843019 + 826366249) % 1431655765;
-  seed_3c = ((seed_3a + seed_3b) * 16843031 + 826366237) % 1431655765;
-  
-  uint count = rand_3() % 2;
-  
-  for (uint i = 0; i < count; i++) {
-    rand_3();
-  }
-  
-  return abs(mod((float)(rand_3()), 65537.0)) / 65537.0;
-}
-
 float lerp(float x, float y, float w) {
   if (w < 0) return x;
   if (w > 1) return y;
@@ -89,44 +81,20 @@ float lerp(float x, float y, float w) {
   return (y - x) * ((w * (w * 6.0 - 15.0) + 10.0) * w * w * w) + x;
 }
 
-float eval_2(float x, float y) {
-  x = x - (int)(x / 8) * 8;
-  y = y - (int)(y / 8) * 16;
-  
-  while (x < 0) x += 8;
-  while (y < 0) y += 16;
-  
-  x -= (y / 2);
-  
-  float dx = x - (int)(x);
-  float dy = y - (int)(y);
-  
-  if (1 - dx < dy) {
-    float tmp = dx;
-    
-    dx = 1 - dy;
-    dy = 1 - tmp;
-    
-    float s = ((dx - dy) + 1) / 2;
-    float h = dx + dy;
-    
-    float t = lerp(grad_2((int)(x + 0), (int)(y + 1)), grad_2((int)(x + 1), (int)(y + 0)), s);
-    return lerp(grad_2((int)(x + 1), (int)(y + 1)), t, h);
-  } else {
-    float s = ((dx - dy) + 1) / 2;
-    float h = dx + dy;
-    
-    float t = lerp(grad_2((int)(x + 0), (int)(y + 1)), grad_2((int)(x + 1), (int)(y + 0)), s);
-    return lerp(grad_2((int)(x + 0), (int)(y + 0)), t, h);
-  }
-}
-
 bool in_cloud(float x, float z) {
-  return eval_2((int)((int)(x) / 8) / 4.0 + 11.2, (int)((int)(z) / 8) / 4.0 + 6.5) < 0.3;
+  float j = floor(x / 8.0) / 2.0;
+  float i = floor(z / 8.0) / 2.0;
+  
+  float value = 1.3 * (1 + sin(1.2 * j + 0.7 * i)) * (1 + sin(1.5 * j - 0.4 * i)) + 0.7 * (1 + sin(2.5 * i - 0.4 * j)) * (1 + sin(1.1 * i - 0.7 * j));
+  return (value * 0.25 < 0.15);
 }
 
 bool in_leaves(float x, float z) {
-  return eval_2((int)(x), (int)(z)) < 0.4;
+  float j = floor(x) * 2.0;
+  float i = floor(z) * 2.0;
+  
+  float value = 1.3 * (1 + sin(1.2 * j + 0.7 * i)) * (1 + sin(1.5 * j - 0.4 * i)) + 0.7 * (1 + sin(2.5 * i - 0.4 * j)) * (1 + sin(1.1 * i - 0.7 * j));
+  return (value * 0.25 < 0.3);
 }
 
 uint get_tile(uint x, uint y, uint z) {
@@ -161,6 +129,36 @@ vec3 get_color(uint tile) {
     color = ivec3(31, 111, 31);
   } else if (tile == vx_tile_wood) {
     color = ivec3(223, 159, 79);
+  } else if (tile == vx_tile_light_wood) {
+    color = ivec3(239, 207, 127);
+  } else if (tile == vx_tile_dark_wood) {
+    color = ivec3(159, 95, 39);
+  } else if (tile == vx_tile_red_bricks) {
+    color = ivec3(255, 95, 63);
+  } else if (tile == vx_tile_gray_bricks) {
+    color = ivec3(175, 175, 175);
+  } else if (tile == vx_tile_glass) {
+    color = ivec3(255, 255, 255);
+  } else if (tile == vx_tile_black_block) {
+    color = ivec3(23, 23, 23);
+  } else if (tile == vx_tile_white_block) {
+    color = ivec3(223, 223, 223);
+  } else if (tile == vx_tile_red_block) {
+    color = ivec3(223, 23, 23);
+  } else if (tile == vx_tile_orange_block) {
+    color = ivec3(223, 123, 23);
+  } else if (tile == vx_tile_yellow_block) {
+    color = ivec3(223, 223, 23);
+  } else if (tile == vx_tile_green_block) {
+    color = ivec3(123, 223, 23);
+  } else if (tile == vx_tile_cyan_block) {
+    color = ivec3(23, 223, 223);
+  } else if (tile == vx_tile_blue_block) {
+    color = ivec3(23, 23, 223);
+  } else if (tile == vx_tile_purple_block) {
+    color = ivec3(123, 23, 223);
+  } else if (tile == vx_tile_magenta_block) {
+    color = ivec3(223, 23, 223);
   }
   
   return vec3((float)(color.x) / 255.0, (float)(color.y) / 255.0, (float)(color.z) / 255.0);
@@ -168,7 +166,7 @@ vec3 get_color(uint tile) {
 
 bool is_solid(uint x, uint y, uint z) {
   uint tile = get_tile(x, y, z);
-  return (tile != vx_tile_air && tile != vx_tile_water);
+  return (tile != vx_tile_air && tile != vx_tile_water && tile != vx_tile_glass && tile != vx_tile_leaves);
 }
 
 float plot_shadow(vec3 start, vec3 ray) {
@@ -204,7 +202,7 @@ float plot_shadow(vec3 start, vec3 ray) {
     side.z = ((position.z + 1) - start.z) * delta.z;
   }
   
-  for (int i = 0; i < vx_iterations; i++) {
+  for (int i = 0; i < vx_iterations * 0.75f; i++) {
     if (side.x <= side.y && side.x <= side.z) {
       side.x += delta.x;
       position.x += step.x;
@@ -221,6 +219,9 @@ float plot_shadow(vec3 start, vec3 ray) {
       
       hit_side = 2;
     }
+    
+    if (position.y < 0 || position.y >= 128) break;
+    if (hit_side == 1) i--;
     
     float dist;
     
@@ -245,7 +246,7 @@ float plot_shadow(vec3 start, vec3 ray) {
       }
       
       return 0.5;
-    } else if (tile != vx_tile_air) {
+    } else if (tile != vx_tile_air && tile != vx_tile_glass) {
       return 0.5;
     }
   }
@@ -271,7 +272,7 @@ float plot_shadow(vec3 start, vec3 ray) {
   return 1.0;
 }
 
-vec3 plot_pixel(vec3 start, vec3 ray) {
+vec4 plot_pixel(vec3 start, vec3 ray) {
   uvec3 position = uvec3((uint)(start.x), (uint)(start.y), (uint)(start.z));
   
   vec3 side = vec3(0.0, 0.0, 0.0);
@@ -282,6 +283,7 @@ vec3 plot_pixel(vec3 start, vec3 ray) {
   float color_left = 1.0;
   
   int hit_side = 0;
+  float depth = 1048576.0;
   
   if (ray.x < 0.0) {
     step.x = -1;
@@ -325,6 +327,9 @@ vec3 plot_pixel(vec3 start, vec3 ray) {
       hit_side = 2;
     }
     
+    if (position.y < 0 || position.y >= 128) break;
+    if (hit_side == 1) i--;
+    
     float dist;
     
     if (hit_side == 0) {
@@ -338,6 +343,7 @@ vec3 plot_pixel(vec3 start, vec3 ray) {
     uint tile = get_tile(position.x, position.y, position.z);
     
     if (tile != vx_tile_air) {
+      if (depth >= 1048576.0) depth = dist;
       vec3 hit = start + (ray * dist);
       
       float border_dist = 1.0;
@@ -455,7 +461,10 @@ vec3 plot_pixel(vec3 start, vec3 ray) {
         }
       }
       
-      if (border_dist < max((2.0 / screen_size.x) * dist, 0.02)) {
+      float border_size = 2.0;
+      if (tile == vx_tile_glass) border_size = 5.0;
+      
+      if (border_dist < max((border_size / screen_size.x) * dist, border_size / 100.0)) {
         border_dist = 0.75;
       } else {
         border_dist = 1.0;
@@ -566,26 +575,52 @@ vec3 plot_pixel(vec3 start, vec3 ray) {
       }
       
       vec3 color = get_color(tile);
-      color *= border_dist * ambient_dist;
-      
       vec3 pre_hit = hit;
       
       if (hit_side == 0) pre_hit.x -= step.x * 0.001;
       if (hit_side == 1) pre_hit.y -= step.y * 0.001;
       if (hit_side == 2) pre_hit.z -= step.z * 0.001;
       
+      vec3 hit_mod = hit - floor(hit);
+      
       if (tile == vx_tile_trunk) {
-        vec3 mod = hit - floor(hit);
-        
-        if (hit_side == 1 && mod.x >= 0.05 && mod.x <= 0.95 && mod.z >= 0.05 && mod.z < 0.95) {
+        if (hit_side == 1 && hit_mod.x >= 0.05 && hit_mod.x <= 0.95 && hit_mod.z >= 0.05 && hit_mod.z < 0.95) {
           color = get_color(vx_tile_wood);
+        }
+      } else if (tile == vx_tile_wood || tile == vx_tile_light_wood || tile == vx_tile_dark_wood) {
+        vec2 hit_mod_2;
+        
+        if (hit_side == 0) hit_mod_2 = hit_mod.zy;
+        if (hit_side == 1) hit_mod_2 = hit_mod.zx;
+        if (hit_side == 2) hit_mod_2 = hit_mod.xy;
+        
+        hit_mod_2.y *= 4.0;
+        hit_mod_2.x = mod(hit_mod_2.x + 0.5 * floor(hit_mod_2.y), 1.0);
+        
+        if (mod(hit_mod_2.y, 1.0) >= 0.8 || hit_mod_2.x <= 0.025 || hit_mod_2.x >= 0.975) {
+          color *= 0.75;
+        }
+      } else if (tile == vx_tile_red_bricks || tile == vx_tile_gray_bricks) {
+        vec2 hit_mod_2;
+        
+        if (hit_side == 0) hit_mod_2 = hit_mod.zy;
+        if (hit_side == 1) hit_mod_2 = hit_mod.zx;
+        if (hit_side == 2) hit_mod_2 = hit_mod.xy;
+        
+        hit_mod_2.y *= 4.0;
+        hit_mod_2.x = mod(hit_mod_2.x * 2.0 + 0.5 * floor(hit_mod_2.y), 1.0);
+        
+        if (mod(hit_mod_2.y, 1.0) >= 0.8 || hit_mod_2.x <= 0.05 || hit_mod_2.x >= 0.95) {
+          color = vec3(0.9, 0.9, 0.9);
         }
       }
       
+      color *= border_dist * ambient_dist;
       color *= plot_shadow(pre_hit, vec3(cos(2 * PI * time), sin(2 * PI * time), 0.0));
       
       if (position == mouse_pos && hit_side == mouse_side) {
-        color = color * 0.5 + vec3(1.0, 1.0, 1.0) * 0.5;
+        color_left /= 2.0;
+        final_color += vec3(1.0, 1.0, 1.0) * color_left;
       }
       
       if (tile == vx_tile_water) {
@@ -636,6 +671,8 @@ vec3 plot_pixel(vec3 start, vec3 ray) {
         
         color_left /= 2.0;
         final_color += color * color_left;
+        
+        i += (int)(vx_iterations * 0.2f);
       } else if (tile == vx_tile_leaves) {
         if (hit_side == 0) {
           if (in_leaves((hit.y - (int)(hit.y)) * 16.0, (hit.z - (int)(hit.z)) * 16.0)) continue;
@@ -643,6 +680,20 @@ vec3 plot_pixel(vec3 start, vec3 ray) {
           if (in_leaves((hit.z - (int)(hit.z)) * 16.0, (hit.x - (int)(hit.x)) * 16.0)) continue;
         } else if (hit_side == 2) {
           if (in_leaves((hit.x - (int)(hit.x)) * 16.0, (hit.y - (int)(hit.y)) * 16.0)) continue;
+        }
+        
+        final_color += color * color_left;
+        color_left = 0.0;
+        
+        break;
+      } else if (tile == vx_tile_glass) {
+        if (border_dist >= 1.0) {
+          float glass_left = color_left / 5.0;
+          
+          final_color += color * glass_left;
+          color_left -= glass_left;
+          
+          continue;
         }
         
         final_color += color * color_left;
@@ -658,7 +709,10 @@ vec3 plot_pixel(vec3 start, vec3 ray) {
     }
   }
   
-  if (color_left <= 0.0) return final_color;
+  if (color_left <= 0.0) return vec4(final_color, depth);
+  
+  // final_color += vec3(0.5, 0.5, 1.0) * color_left;
+  // return vec4(final_color, depth);
   
   float old_y = ray.y;
   
@@ -710,18 +764,91 @@ vec3 plot_pixel(vec3 start, vec3 ray) {
   if (b > 1.0) b = 1.0;
   
   final_color += vec3(r, g, b) * color_left;
-  return final_color;
+  return vec4(final_color, depth);
 }
 
 void main() {
-  vec2 coords = (gl_FragCoord.xy / screen_size.xy) * 2.0 - vec2(1.0, 1.0);
+  vec4 overlay_color = vec4(0.0, 0.0, 0.0, 0.0);
   
-  vec3 ray = vec3(coords.x, coords.y * (screen_size.y / screen_size.x), 1.0);
+  if (gl_FragCoord.x >= screen_size.x - 24 && gl_FragCoord.x < screen_size.x - 4) {
+    if (gl_FragCoord.y >= 4 && gl_FragCoord.y < 24) {
+      vec2 raw_coords = vec2(gl_FragCoord.x - (screen_size.x - 24), gl_FragCoord.y - 4);
+      
+      vec2 hit = raw_coords / 20.0;
+      vec2 hit_mod = hit;
+      
+      overlay_color = vec4(get_color(selected), 1.0);
+      
+      if (selected == vx_tile_wood || selected == vx_tile_light_wood || selected == vx_tile_dark_wood) {
+        vec2 hit_mod_2 = hit_mod.xy;
+        
+        hit_mod_2.y *= 4.0;
+        hit_mod_2.x = mod(hit_mod_2.x + 0.5 * floor(hit_mod_2.y), 1.0);
+        
+        if (mod(hit_mod_2.y, 1.0) >= 0.8 || hit_mod_2.x <= 0.025 || hit_mod_2.x >= 0.975) {
+          overlay_color.xyz *= 0.75;
+        }
+      } else if (selected == vx_tile_red_bricks || selected == vx_tile_gray_bricks) {
+        vec2 hit_mod_2 = hit_mod.xy;
+        
+        hit_mod_2.y *= 4.0;
+        hit_mod_2.x = mod(hit_mod_2.x * 2.0 + 0.5 * floor(hit_mod_2.y), 1.0);
+        
+        if (mod(hit_mod_2.y, 1.0) >= 0.8 || hit_mod_2.x <= 0.05 || hit_mod_2.x >= 0.95) {
+          overlay_color.xyz = vec3(0.9, 0.9, 0.9);
+        }
+      }
+      
+      float border_dist = min(min(hit.x, 1.0 - hit.x), min(hit.y, 1.0 - hit.y));
+      
+      if (border_dist < 0.04) {
+        overlay_color.xyz *= 0.75;
+      } else if (selected == vx_tile_glass) {
+        overlay_color.w *= 0.2;
+      }
+      
+      if (selected == vx_tile_leaves && in_leaves(floor(hit.x * 16.0), floor(hit.y * 16.0))) {
+        overlay_color.w = 0.0;
+      }
+    }
+  }
+  
+  vec2 coords = (gl_FragCoord.xy / screen_size.xy) * 2.0 - vec2(1.0, 1.0);
+  float ratio_y = screen_size.y / screen_size.x;
+  
+  vec3 ray = vec3(coords.x, coords.y * ratio_y, 1.0);
   
   ray.zy = rotate(ray.zy, -angle_ud);
   ray.xz = rotate(ray.xz, -angle_lr);
   
-  vec3 color = plot_pixel(camera + vec3(0.0, 0.5, 0.0), ray);
+  vec4 plot_data = plot_pixel(camera + vec3(0.0, 0.5, 0.0), ray);
+  
+  vec3 color = plot_data.xyz;
+  float depth = plot_data.w;
+  
+  for (int i = 0; i < vx_max_clients; i++) {
+    if (client_array[0 + 3 * i] < 0.0) continue;
+    vec3 relative = vec3(client_array[0 + 3 * i], client_array[1 + 3 * i], client_array[2 + 3 * i]) - (camera + vec3(0.0, 1.0, 0.0));
+    
+    relative.xz = rotate(relative.xz, angle_lr);
+    relative.zy = rotate(relative.zy, angle_ud);
+    
+    if (relative.z >= depth) continue;
+    if (relative.z < 0.0) continue;
+    
+    relative.xy /= relative.z;
+    
+    vec2 screen = vec2((relative.x + 1.0) * (screen_size.x / 2.0), ((relative.y / ratio_y) + 1.0) * (screen_size.y / 2.0));
+    float scale = (screen_size.x / 4.0) / relative.z;
+    
+    vec2 start = screen - vec2(scale, scale);
+    vec2 end = screen + vec2(scale, scale * 3.0);
+    
+    if (gl_FragCoord.x >= start.x && gl_FragCoord.x < end.x && gl_FragCoord.y >= start.y && gl_FragCoord.y < end.y) {
+      color = vec3(1.0, 0.0, 1.0);
+      break;
+    }
+  }
   
   if ((int)(gl_FragCoord.x) == (int)(screen_size.x / 2.0) && abs((int)(gl_FragCoord.y) - (int)(screen_size.y / 2.0)) < 6) {
     color = vec3(1.0, 1.0, 1.0) - color;
@@ -729,5 +856,11 @@ void main() {
     color = vec3(1.0, 1.0, 1.0) - color;
   }
   
-  gl_FragColor = vec4(color, 1.0);
+  if (gl_FragCoord.x >= screen_size.x - 28) {
+    if (gl_FragCoord.y < 28) {
+      color *= 0.5;
+    }
+  }
+  
+  gl_FragColor = vec4(overlay_color.xyz * overlay_color.w + color.xyz * (1.0 - overlay_color.w), 1.0);
 }

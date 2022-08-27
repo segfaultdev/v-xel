@@ -23,6 +23,7 @@ enum {
   
   vx_tile_trunk,
   vx_tile_leaves,
+  vx_tile_wood,
   
   vx_tile_count,
 };
@@ -33,8 +34,8 @@ struct vx_chunk_t {
   uint32_t chunk_x, chunk_z;
   uint8_t data[VX_CHUNK_X * VX_CHUNK_Y * VX_CHUNK_Z];
   
-  uint8_t requested, loaded, dirty;
-};
+  uint8_t requested, loaded, dirty, padding;
+} __attribute__((packed));
 
 enum {
   vx_packet_request,

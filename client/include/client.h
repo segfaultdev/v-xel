@@ -7,6 +7,8 @@
 #define VX_CLOUD_SIDE 512
 #define VX_TOTAL_SIDE 20
 
+#define VX_ITER 256
+
 typedef struct vx_client_t vx_client_t;
 
 struct vx_client_t {
@@ -39,5 +41,9 @@ void vx_client_remove(const char *name);
 void vx_client_update(const char *name, float pos_x, float pos_y, float pos_z);
 
 void vx_chat_add(const char *name, const char *data);
+
+// on client implementation
+
+void on_chunk_update(uint32_t chunk_x, uint32_t chunk_z);
 
 #endif

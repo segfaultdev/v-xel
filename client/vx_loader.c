@@ -36,6 +36,7 @@ static void client_update(msg_Conn *conn, msg_Event event, msg_Data data) {
       vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].requested = 0;
       
       loader_waiting = 0;
+      on_chunk_update(mod_x, mod_z);
     } else if (packet->type == vx_packet_place) {
       if (packet->place.y >= VX_CHUNK_Y) return;
       
@@ -80,6 +81,28 @@ static void *loader_function(void *) {
     
     if (loader_waiting) continue;
     if (!connection) continue;
+    
+    for (int32_t z = -VX_ITER / VX_CHUNK_Z; z <= VX_ITER / VX_CHUNK_Z; z++) {
+      for (int32_t x = -VX_ITER / VX_CHUNK_X; x <= VX_ITER / VX_CHUNK_X; x++) {
+        int32_t chunk_x = x + (int)(vx_player.pos_x / VX_CHUNK_X);
+        int32_t chunk_z = z + (int)(vx_player.pos_z / VX_CHUNK_Z);
+        
+        int32_t mod_x = chunk_x % VX_TOTAL_SIDE;
+        while (mod_x < 0) mod_x += VX_TOTAL_SIDE;
+        
+        int32_t mod_z = chunk_z % VX_TOTAL_SIDE;
+        while (mod_z < 0) mod_z += VX_TOTAL_SIDE;
+        
+        if (vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_x != chunk_x ||
+            vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_z != chunk_z) {
+          vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_x = chunk_x;
+          vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_z = chunk_z;
+          
+          vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].loaded = 0;
+          vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].requested = 1;
+        }
+      }
+    }
     
     int done = 0;
     

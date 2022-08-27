@@ -17,7 +17,7 @@ static void client_update(msg_Conn *conn, msg_Event event, msg_Data data) {
     connection = conn;
     
     msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_welcome));
-    vx_packet_t *packet = msg_data.bytes;
+    vx_packet_t *packet = (void *)(msg_data.bytes);
     
     packet->type = vx_packet_welcome;
     strcpy(packet->welcome, vx_name);
@@ -25,7 +25,7 @@ static void client_update(msg_Conn *conn, msg_Event event, msg_Data data) {
     msg_send(connection, msg_data);
     msg_delete_data(msg_data);
   } else if (event == msg_message || event == msg_reply) {
-    vx_packet_t *packet = data.bytes;
+    vx_packet_t *packet = (void *)(data.bytes);
     
     if (packet->type == vx_packet_chunk) {
       uint32_t mod_x = packet->chunk.chunk_x % VX_TOTAL_SIDE;
@@ -118,7 +118,7 @@ static void *loader_function(void *) {
           loader_waiting = 1;
           
           msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_request));
-          vx_packet_t *packet = msg_data.bytes;
+          vx_packet_t *packet = (void *)(msg_data.bytes);
           
           packet->type = vx_packet_request;
           packet->request[0] = chunk_x;
@@ -162,7 +162,7 @@ void vx_loader_place(uint8_t tile, uint32_t x, uint32_t y, uint32_t z) {
   vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].data[tile_x + (tile_z + y * VX_CHUNK_Z) * VX_CHUNK_X] = tile;
   
   msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_place));
-  vx_packet_t *packet = msg_data.bytes;
+  vx_packet_t *packet = (void *)(msg_data.bytes);
   
   packet->type = vx_packet_place;
   
@@ -182,7 +182,7 @@ void vx_loader_update(float pos_x, float pos_y, float pos_z) {
   if (!connection) return;
   
   msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_update));
-  vx_packet_t *packet = msg_data.bytes;
+  vx_packet_t *packet = (void *)(msg_data.bytes);
   
   packet->type = vx_packet_update;
   
@@ -200,7 +200,7 @@ void vx_loader_chat(const char *data) {
   if (!connection) return;
   
   msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_chat) + strlen(data) + 1);
-  vx_packet_t *packet = msg_data.bytes;
+  vx_packet_t *packet = (void *)(msg_data.bytes);
   
   packet->type = vx_packet_chat;
   strcpy(packet->chat, data);

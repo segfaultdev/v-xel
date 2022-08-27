@@ -52,6 +52,11 @@ int has_sent_camera = 0;
 int has_sent_clients = 0;
 int has_sent_selected = 0;
 
+int single_spinlock = 0;
+
+uint32_t single_updates[4 * 64];
+int single_count = 0;
+
 uint8_t get_world(uint32_t x, uint32_t y, uint32_t z) {
   if (y >= 1048576) return vx_tile_stone;
   return vx_chunk_get(x, y, z);
@@ -340,6 +345,38 @@ int main(int argc, const char **argv) {
         }
       }
     }
+    
+    while (single_spinlock);
+    single_spinlock = 1;
+    
+    for (int i = 0; i < single_count; i++) {
+      uint32_t x = single_updates[0 + 4 * i];
+      uint32_t y = single_updates[1 + 4 * i];
+      uint32_t z = single_updates[2 + 4 * i];
+      uint8_t tile = single_updates[3 + 4 * i];
+      
+      uint32_t chunk_x = (x / 32) % VX_TOTAL_SIDE;
+      uint32_t chunk_z = (z / 32) % VX_TOTAL_SIDE;
+      
+      uint32_t tile_x = x % 32;
+      uint32_t tile_z = z % 32;
+      
+      uint32_t data_start = (chunk_x + chunk_z * VX_TOTAL_SIDE) * 32 * 32 * 128;
+      
+      glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunk_ssbo);
+      
+      glBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        data_start + (tile_x + (tile_z + y * 32) * 32),
+        1,
+        &tile
+      );
+      
+      glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    }
+    
+    single_count = 0;
+    single_spinlock = 0;
     
     float shader_time = daytime;
     SetShaderValue(shader, GetShaderLocation(shader, "time"), &shader_time, SHADER_UNIFORM_FLOAT);
@@ -692,21 +729,16 @@ void on_chunk_update(uint32_t chunk_x, uint32_t chunk_z) {
 }
 
 void on_place_update(uint8_t tile, uint32_t x, uint32_t y, uint32_t z) {
-  uint32_t chunk_x = (x / 32) % VX_TOTAL_SIDE;
-  uint32_t chunk_z = (z / 32) % VX_TOTAL_SIDE;
+  while (single_spinlock);
+  single_spinlock = 1;
   
-  uint32_t tile_x = x % 32;
-  uint32_t tile_z = z % 32;
+  single_updates[0 + 4 * single_count] = x;
+  single_updates[1 + 4 * single_count] = y;
+  single_updates[2 + 4 * single_count] = z;
+  single_updates[3 + 4 * single_count] = tile;
   
-  uint32_t data_start = (chunk_x + chunk_z * VX_TOTAL_SIDE) * 32 * 32 * 128;
-  glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunk_ssbo);
-  
-  glBufferSubData(
-    GL_SHADER_STORAGE_BUFFER,
-    data_start + (tile_x + (tile_z + y * 32) * 32),
-    1,
-    &tile
-  );
+  single_count++;
+  single_spinlock = 0;
 }
 
 void on_client_update(void) {

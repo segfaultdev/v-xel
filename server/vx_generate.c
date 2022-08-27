@@ -298,8 +298,14 @@ void vx_generate(vx_chunk_t *chunk) {
       }
     }
   }
-  
-  int count = (int)((eval_2(14.1 + chunk->chunk_x / 6.0f, 42.5 + chunk->chunk_z / 6.0f) * 4.5f) - 1.5f);
+
+  int count;
+  count = (int)((eval_2(14.1 + chunk->chunk_x / 6.0f, 42.5 + chunk->chunk_z / 6.0f) * 2.5f) - 1.5f);
+  for (int i = 0; i < count; i++) {
+    vx_house(chunk);
+  }
+
+  count = (int)((eval_2(14.1 + chunk->chunk_x / 6.0f, 42.5 + chunk->chunk_z / 6.0f) * 4.5f) - 1.5f);
   for (int i = 0; i < count; i++) {
     vx_tree(chunk);
   }

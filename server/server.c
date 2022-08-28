@@ -1,5 +1,6 @@
 #include <msgbox.h>
 #include <server.h>
+#include <signal.h>
 #include <string.h>
 #include <stdio.h>
 
@@ -142,11 +143,28 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
   }
 }
 
+void save_and_exit(int signal_id) {
+  printf("saving all loaded chunks\n");
+  vx_chunk_unload(vx_loaded_count);
+  
+  exit(0);
+}
+
 int main(void) {
   vx_chunk_init();
   vx_client_init();
   
   msg_listen("tcp://*:14142", server_update);
+  
+  signal(SIGINT, save_and_exit);
+  signal(SIGILL, save_and_exit);
+  signal(SIGABRT, save_and_exit);
+  signal(SIGFPE, save_and_exit);
+  signal(SIGSEGV, save_and_exit);
+  signal(SIGTRAP, save_and_exit);
+  signal(SIGTERM, save_and_exit);
+  signal(SIGHUP, save_and_exit);
+  signal(SIGQUIT, save_and_exit);
   
   for (;;) {
     msg_runloop(10);

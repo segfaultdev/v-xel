@@ -1,3 +1,7 @@
+// TODO list for generation stuff:
+// - random wooden bridges with support logs starting at mountains
+// - random wooden or brick house ruins
+
 #include <server.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -228,6 +232,83 @@ void vx_tree(vx_chunk_t *chunk) {
   }
 }
 
+static uint8_t get_house_tile(vx_chunk_t *chunk, uint32_t x, uint32_t y, uint32_t z, int swapped) {
+  if (swapped) return get_chunk_tile(chunk, z, y, x);
+  else return get_chunk_tile(chunk, x, y, z);
+}
+
+static void set_house_tile(vx_chunk_t *chunk, uint8_t tile, uint32_t x, uint32_t y, uint32_t z, int swapped) {
+  if (rand_3() % 4 == 0) tile = vx_tile_air;
+  
+  if (swapped) set_chunk_tile(chunk, tile, z, y, x);
+  else set_chunk_tile(chunk, tile, x, y, z);
+}
+
+void vx_house(vx_chunk_t *chunk) {
+  int width = 4 + (rand_3() % 3);
+  int length = width + 3 + (rand_3() % 3);
+  
+  int height = 4 + (rand_3() % 1);
+  
+  int swapped = rand_3() % 2;
+  
+  int x = 1 + (rand_3() % (((swapped ? VX_CHUNK_Z : VX_CHUNK_X) - width) - 1));
+  int z = 1 + (rand_3() % (((swapped ? VX_CHUNK_X : VX_CHUNK_Z) - length) - 1));
+  
+  int min_y = VX_CHUNK_Y - 1;
+  int max_y = 0;
+  
+  for (int i = z; i < z + length; i++) {
+    for (int j = x; j < x + width; j++) {
+      while (min_y && get_house_tile(chunk, j, min_y, i, swapped) == vx_tile_air) min_y--;
+      
+      if (get_house_tile(chunk, j, min_y, i, swapped) == vx_tile_water) return;
+      if (!min_y) return;
+      
+      while (max_y < VX_CHUNK_Y && get_house_tile(chunk, j, max_y, i, swapped) != vx_tile_air) max_y++;
+      if (max_y >= VX_CHUNK_Y) return;
+    }
+  }
+  
+  if (max_y >= min_y + 1 + height) return;
+  
+  for (int i = min_y + 1; i < min_y + 1 + height; i++) {
+    for (int j = z; j < z + length; j++) {
+      for (int k = x; k < x + width; k++) {
+        uint8_t tile;
+        
+        if ((k == x || k == x + (width - 1)) && (j == z || j == z + (length - 1))) {
+          tile = vx_tile_trunk;
+        } else if ((k == x || k == x + (width - 1)) || (j == z || j == z + (length - 1))) {
+          tile = vx_tile_wood;
+        } else if (i == min_y + 1) {
+          tile = vx_tile_dark_wood;
+        } else {
+          tile = vx_tile_air;
+        }
+        
+        set_house_tile(chunk, tile, k, i, j, swapped);
+      }
+    }
+  }
+  
+  for (int i = 0; i < width + 2; i++) {
+    int h;
+    
+    if (i < (width + 2) / 2) h = i;
+    else h = (width + 1) - i;
+    
+    for (int j = 0; j < length + 2; j++) {
+      set_house_tile(chunk, vx_tile_trunk, (i + x) - 1, min_y + height + h, (j + z) - 1, swapped);
+    }
+    
+    for (int j = min_y + height + 1; j < min_y + height + h; j++) {
+      set_house_tile(chunk, vx_tile_wood, (i + x) - 1, j, z, swapped);
+      set_house_tile(chunk, vx_tile_wood, (i + x) - 1, j, z + (length - 1), swapped);
+    }
+  }
+}
+
 static float magic_function(float x) {
   x = x - 0.125f;
   x = cosf(x) * cosf(x) - 0.4f;
@@ -281,6 +362,8 @@ void vx_generate(vx_chunk_t *chunk) {
   float value = eval_2(tree_x, tree_z);
   
   int count = (int)(magic_function(value) * 64.0f - eval_2(tree_z + 55.17f, tree_x - 3.13f) * 12.0f);
+  
+  if (count < 12) vx_house(chunk);
   
   for (int i = 0; i < count; i++) {
     vx_tree(chunk);

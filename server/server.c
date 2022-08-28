@@ -165,6 +165,7 @@ int main(void) {
   signal(SIGTERM, save_and_exit);
   signal(SIGHUP, save_and_exit);
   signal(SIGQUIT, save_and_exit);
+  signal(SIGKILL, save_and_exit);
   
   for (;;) {
     msg_runloop(10);

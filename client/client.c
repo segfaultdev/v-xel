@@ -641,14 +641,6 @@ int main(int argc, const char **argv) {
         has_sent_selected = 0;
       }
       
-      if (IsKeyDown(KEY_Z)) {
-        vx_time += 0.15f * GetFrameTime();
-        while (vx_time >= 1.0f) vx_time -= 1.0f;
-      } else if (IsKeyDown(KEY_C)) {
-        vx_time -= 0.15f * GetFrameTime();
-        while (vx_time < 0.0f) vx_time += 1.0f;
-      }
-      
       if (IsKeyPressed(KEY_T)) {
         current_length = 0;
         blank_start = GetTime();
@@ -736,6 +728,8 @@ int main(int argc, const char **argv) {
     last_x = vx_player.pos_x;
     last_y = vx_player.pos_y;
     last_z = vx_player.pos_z;
+    
+    vx_time = fmodf(vx_time, 1.0f);
   }
   
   CloseWindow();

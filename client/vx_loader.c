@@ -37,6 +37,22 @@ static void client_update(msg_Conn *conn, msg_Event event, msg_Data data) {
       
       loader_waiting = 0;
       on_chunk_update(mod_x, mod_z);
+    } else if (packet->type == vx_packet_chunk_rle) {
+      uint32_t mod_x = packet->chunk_rle.chunk_x % VX_TOTAL_SIDE;
+      uint32_t mod_z = packet->chunk_rle.chunk_z % VX_TOTAL_SIDE;
+      
+      size_t input_size = data.num_bytes - vx_packet_size(vx_packet_chunk_rle);
+      size_t output_size;
+      
+      vx_packet_decode(packet->chunk_rle.data, input_size, vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].data, &output_size, 0);
+      
+      vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_x = packet->chunk_rle.chunk_x;
+      vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_z = packet->chunk_rle.chunk_z;
+      vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].loaded = 1;
+      vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].requested = 0;
+      
+      loader_waiting = 0;
+      on_chunk_update(mod_x, mod_z);
     } else if (packet->type == vx_packet_place) {
       if (packet->place.y >= VX_CHUNK_Y) return;
       
@@ -101,6 +117,9 @@ static void *loader_function(void *cum) {
           int32_t chunk_x = dx + (int)(vx_player.pos_x / VX_CHUNK_X);
           int32_t chunk_z = dz + (int)(vx_player.pos_z / VX_CHUNK_Z);
           
+          if (chunk_x < 0) continue;
+          if (chunk_z < 0) continue;
+          
           int32_t mod_x = chunk_x % VX_TOTAL_SIDE;
           while (mod_x < 0) mod_x += VX_TOTAL_SIDE;
           
@@ -139,9 +158,9 @@ static void *loader_function(void *cum) {
           msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_request));
           vx_packet_t *packet = (void *)(msg_data.bytes);
           
-          packet->type = vx_packet_request;
-          packet->request[0] = chunk_x;
-          packet->request[1] = chunk_z;
+          packet->type = vx_packet_request_rle;
+          packet->request_rle[0] = chunk_x;
+          packet->request_rle[1] = chunk_z;
           
           msg_send(connection, msg_data);
           msg_delete_data(msg_data);

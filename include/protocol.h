@@ -64,6 +64,8 @@ enum {
   vx_packet_bye,
   vx_packet_update,
   vx_packet_chat,
+  vx_packet_request_rle,
+  vx_packet_chunk_rle,
 };
 
 typedef struct vx_packet_t vx_packet_t;
@@ -89,7 +91,17 @@ struct vx_packet_t {
     } __attribute__((packed)) update;
     
     char chat[65536];
+    uint32_t request_rle[2];
+    
+    struct {
+      uint32_t chunk_x, chunk_z;
+      uint8_t data[1048576];
+    } __attribute__((packed)) chunk_rle;
   };
 } __attribute__((packed));
+
+size_t vx_packet_size(uint16_t type);
+void   vx_packet_encode(void *input, size_t input_size, void *output, size_t *output_size, int is_output_file);
+void   vx_packet_decode(void *input, size_t input_size, void *output, size_t *output_size, int is_input_file);
 
 #endif

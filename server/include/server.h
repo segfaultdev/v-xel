@@ -27,8 +27,6 @@ extern int vx_loaded_count;
 
 extern vx_client_t *vx_clients;
 
-size_t vx_packet_size(uint16_t type);
-
 void        vx_chunk_init(void);
 vx_chunk_t *vx_chunk_load(uint32_t chunk_x, uint32_t chunk_z);
 void        vx_chunk_unload(int count);

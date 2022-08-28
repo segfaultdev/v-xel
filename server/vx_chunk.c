@@ -42,38 +42,8 @@ vx_chunk_t *vx_chunk_load(uint32_t chunk_x, uint32_t chunk_z) {
   FILE *file = fopen(path, "rb");
   
   if (file) {
-    // printf("loading chunk (%u, %u)\n", chunk_x, chunk_z);
-    uint32_t offset = 0;
-    
-    while (!feof(file)) {
-      uint32_t count = 0;
-      int shift = 0;
-      
-      for (;;) {
-        uint8_t byte;
-        fread(&byte, 1, 1, file);
-        
-        count |= ((uint32_t)(byte & 0x7F) << (shift * 7));
-        shift++;
-        
-        if (!(byte & 0x80)) break;
-      }
-      
-      if (count % 2) {
-        fread(chunk->data + offset, 1, count >> 1, file);
-      } else {
-        uint8_t byte;
-        fread(&byte, 1, 1, file);
-        
-        if (count >> 1 > VX_CHUNK_X * VX_CHUNK_Z * VX_CHUNK_Y - offset) {
-          count = (VX_CHUNK_X * VX_CHUNK_Z * VX_CHUNK_Y - offset) << 1;
-        }
-        
-        memset(chunk->data + offset, byte, count >> 1);
-      }
-      
-      offset += (count >> 1);
-    }
+    size_t output_size;
+    vx_packet_decode(file, 0, chunk->data, &output_size, 1);
     
     fclose(file);
     chunk->dirty = 0;
@@ -98,47 +68,11 @@ static void vx_chunk_unload_single(int index) {
     char path[40];
     sprintf(path, "chunks/%u-%u.bin", vx_loaded_chunks[index]->chunk_x, vx_loaded_chunks[index]->chunk_z);
     
-    FILE *file = fopen(path, "w+b");
+    FILE *file = fopen(path, "wb");
     
     if (file) {
-      uint32_t count = 0;
-      uint8_t last = 0;
-      
-      for (uint32_t i = 0; i < VX_CHUNK_X * VX_CHUNK_Z * VX_CHUNK_Y; i++) {
-        uint8_t curr = vx_loaded_chunks[index]->data[i];
-        if (!i) last = curr;
-        
-        if (curr != last) {
-          count <<= 1; // bottom bit is 1 when raw encoding, 0 when run-length encoding
-          
-          while (count) {
-            uint8_t byte = count & 0x7F;
-            count >>= 7;
-            
-            if (count) byte |= 0x80;
-            fwrite(&byte, 1, 1, file);
-          }
-          
-          fwrite(&last, 1, 1, file);
-        }
-        
-        last = curr;
-        count++;
-      }
-      
-      if (count) {
-        count <<= 1; // bottom bit is 1 when raw encoding, 0 when run-length encoding
-        
-        while (count) {
-          uint8_t byte = count & 0x7F;
-          count >>= 7;
-          
-          if (count) byte |= 0x80;
-          fwrite(&byte, 1, 1, file);
-        }
-        
-        fwrite(&last, 1, 1, file);
-      }
+      size_t output_size;
+      vx_packet_encode(vx_loaded_chunks[index]->data, VX_CHUNK_X * VX_CHUNK_Z * VX_CHUNK_Y, file, &output_size, 1);
       
       fclose(file);
     } else {

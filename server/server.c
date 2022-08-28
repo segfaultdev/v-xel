@@ -208,6 +208,27 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         msg_send(vx_clients[i].connection, msg_data);
         msg_delete_data(msg_data);
       }
+    } else if (packet->type == vx_packet_request_rle) {
+      if (packet->request_rle[0] < VX_TOTAL_X && packet->request_rle[1] < VX_TOTAL_Z) {
+        // printf("player issued chunk (%u, %u)\n", packet->request[0], packet->request[1]);
+        
+        vx_chunk_t *chunk = vx_chunk_load(packet->request[0], packet->request[1]);
+        
+        size_t output_size;
+        vx_packet_encode(chunk->data, VX_CHUNK_X * VX_CHUNK_Z * VX_CHUNK_Y, NULL, &output_size, 0);
+        
+        msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_chunk_rle) + output_size);
+        vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
+        
+        response->type = vx_packet_chunk_rle;
+        response->chunk_rle.chunk_x = packet->request[0];
+        response->chunk_rle.chunk_z = packet->request[1];
+        
+        vx_packet_encode(chunk->data, VX_CHUNK_X * VX_CHUNK_Z * VX_CHUNK_Y, response->chunk_rle.data, &output_size, 0);
+        
+        msg_send(conn, msg_data);
+        msg_delete_data(msg_data);
+      }
     }
   } else if (event == msg_connection_closed || event == msg_connection_lost || event == msg_error) {
     vx_client_t *client = vx_client_find(conn);

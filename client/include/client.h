@@ -27,8 +27,6 @@ extern int vx_message_count;
 
 extern vx_client_t vx_player;
 
-size_t vx_packet_size(uint16_t type);
-
 void    vx_chunk_init(void);
 uint8_t vx_chunk_get(uint32_t x, uint32_t y, uint32_t z);
 

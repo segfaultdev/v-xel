@@ -97,7 +97,7 @@ bool in_leaves(float x, float z) {
 }
 
 uint get_tile(uint x, uint y, uint z) {
-  if (y >= 128) return 0;
+  if (y >= 128) return vx_tile_air;
   
   uint chunk_x = (x / 32) % vx_total_side;
   uint chunk_z = (z / 32) % vx_total_side;

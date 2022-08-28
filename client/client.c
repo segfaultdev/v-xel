@@ -241,6 +241,12 @@ int main(int argc, const char **argv) {
   Shader shader = LoadShader(0, shader_path);
   int flying = 0;
   
+  while (vx_player.pos_x < 0) vx_player.pos_x += 16777216.0f;
+  while (vx_player.pos_z < 0) vx_player.pos_z += 16777216.0f;
+  
+  vx_player.pos_x = fmodf(vx_player.pos_x, 16777216.0f);
+  vx_player.pos_z = fmodf(vx_player.pos_z, 16777216.0f);
+  
   last_x = vx_player.pos_x;
   last_y = vx_player.pos_y;
   last_z = vx_player.pos_z;
@@ -291,6 +297,12 @@ int main(int argc, const char **argv) {
   float blank_start = GetTime();
   
   while (!WindowShouldClose()) {
+    while (vx_player.pos_x < 0) vx_player.pos_x += 16777216.0f;
+    while (vx_player.pos_z < 0) vx_player.pos_z += 16777216.0f;
+    
+    vx_player.pos_x = fmodf(vx_player.pos_x, 16777216.0f);
+    vx_player.pos_z = fmodf(vx_player.pos_z, 16777216.0f);
+    
     if (IsWindowResized()) {
       UnloadRenderTexture(target);
       has_sent_size = 0;

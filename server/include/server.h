@@ -41,4 +41,11 @@ void         vx_client_exit(vx_client_t *client);
 vx_client_t *vx_client_find(void *connection);
 vx_client_t *vx_client_find_name(const char *name);
 
+void vx_command(vx_client_t *client, const char *command);
+
+void vx_server_send(vx_client_t *client, const char *text);
+void vx_server_tell(vx_client_t *sender, vx_client_t *client, const char *text);
+void vx_server_post(const char *text);
+void vx_server_move(vx_client_t *client, float pos_x, float pos_y, float pos_z);
+
 #endif

@@ -12,6 +12,8 @@ void vx_chat_add(const char *name, const char *data) {
   char *buffer;
   
   if (name) {
+    if (data[0] == '/') return;
+    
     buffer = malloc(strlen(name) + strlen(data) + 4);
     sprintf(buffer, "[%s] %s", name, data);
   } else {

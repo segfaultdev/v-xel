@@ -6,6 +6,88 @@
 
 uint32_t vx_seed = 123456789;
 
+void vx_server_send(vx_client_t *client, const char *text) {
+  if (!client->connection) return;
+  
+  msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_chat) + strlen(text) + 1);
+  vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
+  
+  response->type = vx_packet_chat;
+  strcpy(response->chat, text);
+  
+  msg_send(client->connection, msg_data);
+  msg_delete_data(msg_data);
+  
+  printf("(server -> '%s') %s\n", client->name, text);
+}
+
+void vx_server_tell(vx_client_t *sender, vx_client_t *client, const char *text) {
+  if (!sender->connection || !client->connection) return;
+  
+  msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_chat) + strlen(text) + strlen(sender->name) + 11);
+  vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
+  
+  response->type = vx_packet_chat;
+  sprintf(response->chat, "[%s -> you] %s", sender->name, text);
+  
+  msg_send(client->connection, msg_data);
+  msg_delete_data(msg_data);
+  
+  msg_data = msg_new_data_space(vx_packet_size(vx_packet_chat) + strlen(text) + strlen(client->name) + 11);
+  response = (vx_packet_t *)(msg_data.bytes);
+  
+  response->type = vx_packet_chat;
+  sprintf(response->chat, "[you -> %s] %s", client->name, text);
+  
+  msg_send(sender->connection, msg_data);
+  msg_delete_data(msg_data);
+  
+  printf("('%s' -> '%s') %s\n", sender->name, client->name, text);
+}
+
+void vx_server_post(const char *text) {
+  printf("(server) %s\n", text);
+  
+  for (int i = 0; i < VX_MAX_CLIENTS; i++) {
+    vx_client_t *client = vx_clients + i;
+    if (!client->connection) return;
+    
+    msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_chat) + strlen(text) + 1);
+    vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
+    
+    response->type = vx_packet_chat;
+    strcpy(response->chat, text);
+    
+    msg_send(client->connection, msg_data);
+    msg_delete_data(msg_data);
+  }
+  
+  printf("%s\n", text);
+}
+
+void vx_server_move(vx_client_t *client, float pos_x, float pos_y, float pos_z) {
+  client->pos_x = pos_x;
+  client->pos_y = pos_y;
+  client->pos_z = pos_z;
+  
+  for (int i = 0; i < VX_MAX_CLIENTS; i++) {
+    if (!vx_clients[i].connection) continue;
+    
+    msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_update));
+    vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
+    
+    response->type = vx_packet_update;
+    strcpy(response->update.name, client->name);
+    
+    response->update.pos_x = client->pos_x;
+    response->update.pos_y = client->pos_y;
+    response->update.pos_z = client->pos_z;
+    
+    msg_send(vx_clients[i].connection, msg_data);
+    msg_delete_data(msg_data);
+  }
+}
+
 static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
   if (event == msg_message || event == msg_request) {
     vx_packet_t *packet = (vx_packet_t *)(data.bytes);
@@ -104,6 +186,13 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
         msg_delete_data(msg_data);
       }
     } else if (packet->type == vx_packet_chat) {
+      if (packet->chat[0] == '/') {
+        printf("client '%s' issued command '%s'\n", client->name, packet->chat);
+        
+        vx_command(client, packet->chat);
+        return;
+      }
+      
       printf("[%s] %s\n", client->name, packet->chat);
       
       for (int i = 0; i < VX_MAX_CLIENTS; i++) {

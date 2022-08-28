@@ -1,6 +1,6 @@
 // TODO list for generation stuff:
 // - random wooden bridges with support logs starting at mountains
-// - random wooden or brick house ruins
+// - random stone rocks placed on the ground
 
 #include <server.h>
 #include <stddef.h>

@@ -73,7 +73,7 @@ static void client_update(msg_Conn *conn, msg_Event event, msg_Data data) {
   }
 }
 
-static void *loader_function(void *) {
+static void *loader_function(void *cum) {
   char buffer[128];
   sprintf(buffer, "tcp://%s:14142", connection_ip);
   

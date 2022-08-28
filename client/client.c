@@ -218,10 +218,13 @@ void check_jesus(float cam_x, float cam_y, float cam_z, float dir_x, float dir_y
 }
 
 int main(int argc, const char **argv) {
-  if (argc != 3) {
-    printf("usage: %s [NAME] [SERVER]\n", argv[0]);
+  if (argc != 3 && argc != 4) {
+    printf("usage: %s [NAME] [SERVER] (SHADER PATH)\n", argv[0]);
     exit(1);
   }
+  
+  const char *shader_path = "render.fs";
+  if (argc == 4) shader_path = argv[3];
   
   strcpy(vx_name, argv[1]);
   
@@ -235,7 +238,7 @@ int main(int argc, const char **argv) {
   
   SetExitKey(KEY_NULL);
   
-  Shader shader = LoadShader(0, "render.fs");
+  Shader shader = LoadShader(0, shader_path);
   int flying = 0;
   
   last_x = vx_player.pos_x;
@@ -378,8 +381,10 @@ int main(int argc, const char **argv) {
     single_count = 0;
     single_spinlock = 0;
     
-    float shader_time = daytime;
-    SetShaderValue(shader, GetShaderLocation(shader, "time"), &shader_time, SHADER_UNIFORM_FLOAT);
+    if (strcmp(shader_path, "render_faster.fs")) {
+      float shader_time = daytime;
+      SetShaderValue(shader, GetShaderLocation(shader, "time"), &shader_time, SHADER_UNIFORM_FLOAT);
+    }
     
     {
       float ray_x = 0.0f;

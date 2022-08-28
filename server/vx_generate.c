@@ -1,7 +1,3 @@
-// TODO list for generation stuff:
-// - random wooden bridges with support logs starting at mountains
-// - random stone rocks placed on the ground
-
 #include <server.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -116,7 +112,9 @@ static void set_chunk_tile(vx_chunk_t *chunk, uint8_t tile, uint32_t x, uint32_t
   chunk->data[x + (z + y * VX_CHUNK_Z) * VX_CHUNK_X] = tile;
 }
 
-void vx_tree(vx_chunk_t *chunk) {
+static void vx_tree(vx_chunk_t *chunk) {
+  // TODO: check that there are no blocks above the tree
+  
   uint32_t x, y, z;
   int attempt;
   
@@ -244,7 +242,7 @@ static void set_house_tile(vx_chunk_t *chunk, uint8_t tile, uint32_t x, uint32_t
   else set_chunk_tile(chunk, tile, x, y, z);
 }
 
-void vx_house(vx_chunk_t *chunk) {
+static int vx_house(vx_chunk_t *chunk) {
   int width = 4 + (rand_3() % 3);
   int length = width + 3 + (rand_3() % 3);
   
@@ -262,15 +260,15 @@ void vx_house(vx_chunk_t *chunk) {
     for (int j = x; j < x + width; j++) {
       while (min_y && get_house_tile(chunk, j, min_y, i, swapped) == vx_tile_air) min_y--;
       
-      if (get_house_tile(chunk, j, min_y, i, swapped) == vx_tile_water) return;
-      if (!min_y) return;
+      if (get_house_tile(chunk, j, min_y, i, swapped) == vx_tile_water) return 0;
+      if (!min_y) return 0;
       
       while (max_y < VX_CHUNK_Y && get_house_tile(chunk, j, max_y, i, swapped) != vx_tile_air) max_y++;
-      if (max_y >= VX_CHUNK_Y) return;
+      if (max_y >= VX_CHUNK_Y) return 0;
     }
   }
   
-  if (max_y >= min_y + 1 + height) return;
+  if (max_y >= min_y + 1 + height) return 0;
   
   for (int i = min_y + 1; i < min_y + 1 + height; i++) {
     for (int j = z; j < z + length; j++) {
@@ -307,6 +305,147 @@ void vx_house(vx_chunk_t *chunk) {
       set_house_tile(chunk, vx_tile_wood, (i + x) - 1, j, z + (length - 1), swapped);
     }
   }
+  
+  return 1;
+}
+
+static int vx_platform(vx_chunk_t *chunk) {
+  int is_square = rand_3() % 2;
+  int side = 5 + (rand_3() % 5);
+  
+  int x = rand_3() % ((VX_CHUNK_X - side) + 1);
+  int y = 1;
+  int z = rand_3() % ((VX_CHUNK_Z - side) + 1);
+  
+  for (int dz = 0; dz < side; dz++) {
+    for (int dx = 0; dx < side; dx++) {
+      while (y < VX_CHUNK_Y - 1 && get_chunk_tile(chunk, x + dx, y, z + dz) != vx_tile_air) {
+        y++;
+      }
+    }
+  }
+  
+  int max_length = 0;
+  y++;
+  
+  if (is_square) {
+    for (int dz = 0; dz < 2; dz++) {
+      for (int dx = 0; dx < 2; dx++) {
+        int trunk_x = x + 1 + dx * (side - 2);
+        int trunk_z = z + 1 + dz * (side - 2);
+        
+        int length = 0;
+        
+        for (int trunk_y = y - 1; trunk_y; trunk_y--) {
+          if (get_chunk_tile(chunk, trunk_x, trunk_y, trunk_z) == vx_tile_dirt) break;
+          if (get_chunk_tile(chunk, trunk_x, trunk_y, trunk_z) == vx_tile_stone) break;
+          
+          length++;
+        }
+        
+        if (length > max_length) {
+          max_length = length;
+        }
+      }
+    }
+    
+    if (max_length > 7) return 0;
+    
+    for (int dz = 0; dz < 2; dz++) {
+      for (int dx = 0; dx < 2; dx++) {
+        int trunk_x = x + 1 + dx * (side - 2);
+        int trunk_z = z + 1 + dz * (side - 2);
+        
+        for (int trunk_y = y - 1; trunk_y; trunk_y--) {
+          if (get_chunk_tile(chunk, trunk_x, trunk_y, trunk_z) == vx_tile_dirt) break;
+          if (get_chunk_tile(chunk, trunk_x, trunk_y, trunk_z) == vx_tile_stone) break;
+          
+          if (rand_3() % 5 == 0) continue;
+          set_chunk_tile(chunk, vx_tile_trunk, trunk_x, trunk_y, trunk_z);
+        }
+      }
+    }
+  } else {
+    int trunk_x = x + side / 2;
+    int trunk_z = z + side / 2;
+    
+    for (int trunk_y = y - 1; trunk_y; trunk_y--) {
+      if (get_chunk_tile(chunk, trunk_x, trunk_y, trunk_z) == vx_tile_dirt) break;
+      if (get_chunk_tile(chunk, trunk_x, trunk_y, trunk_z) == vx_tile_stone) break;
+      
+      max_length++;
+    }
+    
+    if (max_length > 5) return 0;
+    
+    for (int trunk_y = y - 1; trunk_y; trunk_y--) {
+      if (get_chunk_tile(chunk, trunk_x, trunk_y, trunk_z) == vx_tile_dirt) break;
+      if (get_chunk_tile(chunk, trunk_x, trunk_y, trunk_z) == vx_tile_stone) break;
+      
+      if (rand_3() % 5 == 0) continue;
+      set_chunk_tile(chunk, vx_tile_trunk, trunk_x, trunk_y, trunk_z);
+    }
+  }
+  
+  for (int dz = 0; dz < side; dz++) {
+    for (int dx = 0; dx < side; dx++) {
+      if (!is_square) {
+        float dist_x = (float)(dx + 0.5f) - (float)(side / 2.0f);
+        float dist_z = (float)(dz + 0.5f) - (float)(side / 2.0f);
+        float radius = (float)(side / 2.0f);
+        
+        if (dist_x * dist_x + dist_z * dist_z > radius * radius) {
+          continue;
+        }
+      }
+      
+      if (rand_3() % 5 == 0) continue;
+      
+      set_chunk_tile(chunk, vx_tile_wood, x + dx, y, z + dz);
+    }
+  }
+  
+  return 1;
+}
+
+static int vx_rock(vx_chunk_t *chunk) {
+  int x = 2 + (rand_3() % (VX_CHUNK_X - 4));
+  int y = 1;
+  int z = 2 + (rand_3() % (VX_CHUNK_Z - 4));
+  
+  float radius = 1.0f + ((rand_3() % 5) / 4.0f);
+  
+  while (y < VX_CHUNK_Y - 5 && get_chunk_tile(chunk, x, y, z) != vx_tile_air) {
+    y++;
+  }
+  
+  y--;
+  
+  if (y < 42) {
+    return 0;
+  }
+  
+  if (get_chunk_tile(chunk, x, y, z) != vx_tile_grass && get_chunk_tile(chunk, x, y, z) != vx_tile_dirt) {
+    return 0;
+  }
+  
+  for (int dy = -2; dy <= 2; dy++) {
+    for (int dz = -2; dz <= 2; dz++) {
+      for (int dx = -2; dx <= 2; dx++) {
+        if (get_chunk_tile(chunk, x + dx, y + dy, z + dz) != vx_tile_grass &&
+            get_chunk_tile(chunk, x + dx, y + dy, z + dz) != vx_tile_dirt &&
+            get_chunk_tile(chunk, x + dx, y + dy, z + dz) != vx_tile_air) {
+          continue;
+        }
+        
+        if (dx * dx + dy * dy + dz * dz <= radius * radius) {
+          set_chunk_tile(chunk, vx_tile_stone, x + dx, y + dy, z + dz);
+        }
+      }
+    }
+  }
+  
+  return 1;
 }
 
 static float magic_function(float x) {
@@ -363,9 +502,21 @@ void vx_generate(vx_chunk_t *chunk) {
   
   int count = (int)(magic_function(value) * 64.0f - eval_2(tree_z + 55.17f, tree_x - 3.13f) * 12.0f);
   
-  if (count < 12) vx_house(chunk);
+  if (count < 13) {
+    int done_house = vx_house(chunk);
+    
+    if (!done_house && rand_3() % 6 == 0) {
+      for (int i = 0; i < 10; i++) {
+        if (vx_platform(chunk)) break;
+      }
+    }
+  }
   
   for (int i = 0; i < count; i++) {
+    if (rand_3() % 12 == 0) {
+      if (vx_rock(chunk)) continue;
+    }
+    
     vx_tree(chunk);
   }
 }

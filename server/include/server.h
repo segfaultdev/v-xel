@@ -19,6 +19,7 @@ struct vx_client_t {
 };
 
 extern uint32_t vx_seed;
+extern float vx_time;
 
 extern vx_chunk_t **vx_chunks;
 
@@ -45,5 +46,6 @@ void vx_server_send(vx_client_t *client, const char *text);
 void vx_server_tell(vx_client_t *sender, vx_client_t *client, const char *text);
 void vx_server_post(const char *text);
 void vx_server_move(vx_client_t *client, float pos_x, float pos_y, float pos_z);
+void vx_server_time(vx_client_t *client);
 
 #endif

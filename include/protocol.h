@@ -66,6 +66,7 @@ enum {
   vx_packet_chat,
   vx_packet_request_rle,
   vx_packet_chunk_rle,
+  vx_packet_time,
 };
 
 typedef struct vx_packet_t vx_packet_t;
@@ -97,6 +98,8 @@ struct vx_packet_t {
       uint32_t chunk_x, chunk_z;
       uint8_t data[1048576];
     } __attribute__((packed)) chunk_rle;
+    
+    float time;
   };
 } __attribute__((packed));
 

@@ -83,6 +83,8 @@ static void client_update(msg_Conn *conn, msg_Event event, msg_Data data) {
       vx_client_remove(packet->bye);
     } else if (packet->type == vx_packet_chat) {
       vx_chat_add(NULL, packet->chat);
+    } else if (packet->type == vx_packet_time) {
+      vx_time = packet->time;
     }
   } else if (event == msg_error) {
     vx_fatal("%s\n", msg_as_str(data));

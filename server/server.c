@@ -1,10 +1,13 @@
+#include <sys/time.h>
 #include <msgbox.h>
 #include <server.h>
 #include <signal.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 uint32_t vx_seed = 123456789;
+float vx_time = 0.0f;
 
 void vx_server_send(vx_client_t *client, const char *text) {
   if (!client->connection) return;
@@ -88,6 +91,22 @@ void vx_server_move(vx_client_t *client, float pos_x, float pos_y, float pos_z) 
   }
 }
 
+void vx_server_time(vx_client_t *client) {
+  for (int i = 0; i < VX_MAX_CLIENTS; i++) {
+    if (!vx_clients[i].connection) continue;
+    if (client && vx_clients + i != client) continue;
+    
+    msg_Data msg_data = msg_new_data_space(vx_packet_size(vx_packet_time));
+    vx_packet_t *response = (vx_packet_t *)(msg_data.bytes);
+    
+    response->type = vx_packet_time;
+    response->time = vx_time;
+    
+    msg_send(vx_clients[i].connection, msg_data);
+    msg_delete_data(msg_data);
+  }
+}
+
 static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
   if (event == msg_message || event == msg_request) {
     vx_packet_t *packet = (vx_packet_t *)(data.bytes);
@@ -99,6 +118,8 @@ static void server_update(msg_Conn *conn, msg_Event event, msg_Data data) {
       
       client = vx_client_join(packet->welcome, conn);
       printf("client '%s' connected\n", client->name);
+      
+      vx_server_time(client);
       
       for (int i = 0; i < VX_MAX_CLIENTS; i++) {
         if (!vx_clients[i].connection) continue;
@@ -277,8 +298,34 @@ int main(void) {
   signal(SIGQUIT, save_and_exit);
   signal(SIGKILL, save_and_exit);
   
+  time_t time_offset = time(NULL);
+  
+  float last_send = 0.0f;
+  float last_time = 0.0f;
+  
+  int first = 1;
+  
   for (;;) {
     msg_runloop(10);
+    
+    struct timeval current_data;
+    gettimeofday(&current_data, NULL);
+    
+    float current_time = (float)(current_data.tv_sec - time_offset) + ((float)(current_data.tv_usec) / 1000000.0f);
+    
+    if (first) {
+      last_send = current_time;
+      first = 0;
+    } else {
+      vx_time += (current_time - last_time) / 1440.0f;
+      
+      if (current_time - last_send > 30.0f) {
+        vx_server_time(NULL);
+        last_send = current_time;
+      }
+    }
+    
+    last_time = current_time;
   }
   
   vx_chunk_unload(vx_loaded_count);

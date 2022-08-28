@@ -18,6 +18,8 @@ size_t vx_packet_size(uint16_t type) {
     return (sizeof(uint16_t));
   } else if (type == vx_packet_chunk_rle) {
     return (sizeof(uint16_t) + 2 * sizeof(uint32_t));
+  } else if (type == vx_packet_time) {
+    return (sizeof(uint16_t) + sizeof(float));
   }
   
   return 0;

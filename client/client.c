@@ -29,6 +29,8 @@ vx_client_t vx_player = (vx_client_t){
   .pos_z = 16384.0f,
 };
 
+float vx_time = 0.25f;
+
 float last_x = 0.0f;
 float last_y = 0.0f;
 float last_z = 0.0f;
@@ -38,8 +40,6 @@ int on_ground = 0;
 
 float angle_lr = 0;
 float angle_ud = 0;
-
-float daytime = 0.25f;
 
 GLuint chunk_ssbo;
 GLuint client_ssbo;
@@ -394,7 +394,7 @@ int main(int argc, const char **argv) {
     single_spinlock = 0;
     
     if (strcmp(shader_path, "render_faster.fs")) {
-      float shader_time = daytime;
+      float shader_time = vx_time;
       SetShaderValue(shader, GetShaderLocation(shader, "time"), &shader_time, SHADER_UNIFORM_FLOAT);
     }
     
@@ -642,11 +642,11 @@ int main(int argc, const char **argv) {
       }
       
       if (IsKeyDown(KEY_Z)) {
-        daytime += 0.15f * GetFrameTime();
-        while (daytime >= 1.0f) daytime -= 1.0f;
+        vx_time += 0.15f * GetFrameTime();
+        while (vx_time >= 1.0f) vx_time -= 1.0f;
       } else if (IsKeyDown(KEY_C)) {
-        daytime -= 0.15f * GetFrameTime();
-        while (daytime < 0.0f) daytime += 1.0f;
+        vx_time -= 0.15f * GetFrameTime();
+        while (vx_time < 0.0f) vx_time += 1.0f;
       }
       
       if (IsKeyPressed(KEY_T)) {
@@ -716,11 +716,11 @@ int main(int argc, const char **argv) {
     sprintf(buffer, "(%.02f, %.02f, %.02f)", vx_player.pos_x, vx_player.pos_y, vx_player.pos_z);
     DrawText(buffer, 10, 30, 20, WHITE);
     
-    sprintf(buffer, "Time: %02d:%02d", ((int)(daytime * 24.0f) + 10) % 24, (int)(daytime * 24.0f * 60.0f) % 60);
+    sprintf(buffer, "Time: %02d:%02d", ((int)(vx_time * 24.0f) + 10) % 24, (int)(vx_time * 24.0f * 60.0f) % 60);
     DrawText(buffer, 10, 50, 20, WHITE);
     
-    daytime += GetFrameTime() / 1440.0f;
-    while (daytime >= 1.0f) daytime -= 1.0f;
+    vx_time += GetFrameTime() / 1440.0f;
+    while (vx_time >= 1.0f) vx_time -= 1.0f;
     
     DrawFPS(10, 10);
     EndDrawing();

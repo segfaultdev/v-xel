@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 
 void vx_command(vx_client_t *client, const char *command) {
   const char *old_command = command;
@@ -56,7 +57,7 @@ void vx_command(vx_client_t *client, const char *command) {
     return;
   } else if (!strcmp(args[0], "/help")) {
     if (count == 1) {
-      vx_server_send(client, "available commands: /ping /help /save /tp /tell /place /fill");
+      vx_server_send(client, "available commands: /ping /help /save /tp /tell /place /fill /time");
       return;
     } else if (count == 2) {
       if (!strcmp(args[1], "ping")) {
@@ -79,6 +80,10 @@ void vx_command(vx_client_t *client, const char *command) {
         return;
       } else if (!strcmp(args[1], "fill")) {
         vx_server_send(client, "/fill [x1] [y1] [z1] [x2] [y2] [z2] [tile]: fills an area with a tile id (air = 0, water = 1, etc.)");
+        return;
+      } else if (!strcmp(args[1], "time")) {
+        vx_server_send(client, "/time [hours]:[minutes] or /time [time]: sets the time to an specified time, either in standard format or "
+                               "as a number from 0 to 1");
         return;
       }
     }
@@ -146,6 +151,36 @@ void vx_command(vx_client_t *client, const char *command) {
     
   } else if (!strcmp(args[0], "/fill")) {
     
+  } else if (!strcmp(args[0], "/time") && count == 2) {
+    char *end;
+    float time = strtof(args[1], &end);
+    
+    int valid = 0;
+    
+    if (!(*end)) {
+      valid = 1;
+    } else if (*end == ':') {
+      float minutes = strtof(end + 1, &end);
+      time = fmodf(time + 14.0f, 24.0f);
+      
+      if (!(*end)) {
+        time = ((time * 60.0f) + fmodf(minutes, 60.0f)) / 1440.0f;
+        valid = 1;
+      }
+    }
+    
+    if (valid) {
+      char buffer[100];
+      
+      vx_time = time;
+      vx_server_time(NULL);
+      
+      sprintf(buffer, "client '%s' set the time to %02d:%02d", client->name,
+        ((int)(vx_time * 24.0f) + 10) % 24, (int)(vx_time * 24.0f * 60.0f) % 60);
+      
+      vx_server_post(buffer);
+      return;
+    }
   }
   
   char buffer[strlen(old_command) + 100];

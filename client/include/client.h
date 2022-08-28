@@ -26,6 +26,7 @@ extern char **vx_messages;
 extern int vx_message_count;
 
 extern vx_client_t vx_player;
+extern float vx_time;
 
 void    vx_chunk_init(void);
 uint8_t vx_chunk_get(uint32_t x, uint32_t y, uint32_t z);

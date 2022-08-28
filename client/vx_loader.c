@@ -85,29 +85,48 @@ static void *loader_function(void *) {
     if (loader_waiting) continue;
     if (!connection) continue;
     
-    for (int32_t z = -VX_ITER / VX_CHUNK_Z; z <= VX_ITER / VX_CHUNK_Z; z++) {
-      for (int32_t x = -VX_ITER / VX_CHUNK_X; x <= VX_ITER / VX_CHUNK_X; x++) {
-        int32_t chunk_x = x + (int)(vx_player.pos_x / VX_CHUNK_X);
-        int32_t chunk_z = z + (int)(vx_player.pos_z / VX_CHUNK_Z);
-        
-        int32_t mod_x = chunk_x % VX_TOTAL_SIDE;
-        while (mod_x < 0) mod_x += VX_TOTAL_SIDE;
-        
-        int32_t mod_z = chunk_z % VX_TOTAL_SIDE;
-        while (mod_z < 0) mod_z += VX_TOTAL_SIDE;
-        
-        if (vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_x != chunk_x ||
-            vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_z != chunk_z) {
-          vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_x = chunk_x;
-          vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_z = chunk_z;
+    int done = 0;
+    
+    int max_dist = 1 + (VX_ITER / VX_CHUNK_X);
+    if (1 + (VX_ITER / VX_CHUNK_Z) > max_dist) max_dist = 1 + (VX_ITER / VX_CHUNK_Z);
+    
+    for (int32_t dist = 0; dist <= max_dist; dist++) {
+      for (int32_t dz = -dist; dz <= dist; dz++) {
+        for (int32_t dx = -dist; dx <= dist; dx++) {
+          int32_t ix = (dx < 0 ? -dx : dx);
+          int32_t iz = (dz < 0 ? -dz : dz);
           
-          vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].loaded = 0;
-          vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].requested = 1;
+          if (ix + iz != dist) continue;
+          
+          int32_t chunk_x = dx + (int)(vx_player.pos_x / VX_CHUNK_X);
+          int32_t chunk_z = dz + (int)(vx_player.pos_z / VX_CHUNK_Z);
+          
+          int32_t mod_x = chunk_x % VX_TOTAL_SIDE;
+          while (mod_x < 0) mod_x += VX_TOTAL_SIDE;
+          
+          int32_t mod_z = chunk_z % VX_TOTAL_SIDE;
+          while (mod_z < 0) mod_z += VX_TOTAL_SIDE;
+          
+          if (vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_x != chunk_x ||
+              vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_z != chunk_z) {
+            vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_x = chunk_x;
+            vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].chunk_z = chunk_z;
+            
+            vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].loaded = 0;
+            vx_chunks[mod_x + mod_z * VX_TOTAL_SIDE].requested = 1;
+            
+            done = 1;
+            break;
+          }
         }
+        
+        if (done) break;
       }
+      
+      if (done) break;
     }
     
-    int done = 0;
+    done = 0;
     
     for (uint32_t z = 0; z < VX_TOTAL_SIDE; z++) {
       for (uint32_t x = 0; x < VX_TOTAL_SIDE; x++) {

@@ -69,6 +69,35 @@ float square(float x) {
   return x * x;
 }
 
+float _atan2(float x, float y) {
+  if (x > 0) {
+    return atan(y / x);
+  } else if (x < 0) {
+    if (y >= 0) return atan(y / x) + PI;
+    else return atan(y / x) - PI;
+  } else {
+    if (y > 0) return PI / 2.0;
+    else if (y < 0) return -PI / 2.0;
+    else return 0;
+  }
+}
+
+float atan2(float x, float y) {
+  return mod(_atan2(x, y) + 2.0 * PI, 2.0 * PI);
+}
+
+float signed_angle_dist(float x, float y) {
+  while (x < 0.0) x += 2.0 * PI;
+  x = mod(x, 2.0 * PI);
+  
+  while (y < 0.0) y += 2.0 * PI;
+  y = mod(y, 2.0 * PI);
+  
+  if (x >= PI && y < PI && x - y >= PI) return (x - (2.0 * PI)) - y;
+  else if (x < PI && y >= PI && y - x >= PI) return (x + (2.0 * PI)) - y;
+  else return x - y;
+}
+
 vec2 rotate(vec2 vector, float angle) {
   return vec2(vector.x * cos(angle) - vector.y * sin(angle), vector.x * sin(angle) + vector.y * cos(angle));
 }
@@ -711,14 +740,7 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
   }
   
   if (color_left <= 0.0) return vec4(final_color, depth);
-  
-  // final_color += vec3(0.5, 0.5, 1.0) * color_left;
-  // return vec4(final_color, depth);
-  
-  float old_y = ray.y;
-  
-  if (ray.y < 0.000001) ray.y = 0.000001;
-  float ceil_w = (160.0 - start.y) / ray.y;
+  float ceil_w = (240.0 - start.y) / ray.y;
   
   float ceil_x = mod((start.x + ray.x * ceil_w) + time * vx_cloud_side, vx_cloud_side);
   while (ceil_x < 0.0) ceil_x += vx_cloud_side;
@@ -726,7 +748,7 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
   float ceil_z = mod((start.z + ray.z * ceil_w) - time * vx_cloud_side, vx_cloud_side);
   while (ceil_z < 0.0) ceil_z += vx_cloud_side;
   
-  float light = cos(PI * (time + 0.25f)) * cos(PI * (time + 0.25f));
+  float light = cos(PI * (time + 0.25)) * cos(PI * (time + 0.25));
   float k = 800.0 * light;
   
   k = k * k;
@@ -736,12 +758,44 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
   float cg = k / 78904810000.0;
   float cb = k / 37480960000.0;
   
-  ceil_w = ((240.0 - start.y) / ray.y) / 100.0;
-  ceil_w = 32.0 / ceil_w;
+  float dist;
   
-  if (old_y >= 0.000001 && in_cloud(ceil_x, ceil_z)) {
-    ceil_w = lerp(0.0, ceil_w, light);
+  if (hit_side == 0) {
+    dist = side.x - delta.x;
+  } else if (hit_side == 1) {
+    dist = side.y - delta.y;
+  } else if (hit_side == 2) {
+    dist = side.z - delta.z;
   }
+  
+  float valid_x = ray.x;
+  
+  if (time >= 0.25 && time < 0.75) {
+    valid_x *= -1.0;
+  }
+  
+  float angle = atan(abs(ray.y) / abs(valid_x));
+  
+  if (valid_x < 0.0) {
+    angle = PI - angle;
+  }
+  
+  if (ray.y < 0.0) {
+    angle *= -1.0;
+  }
+  
+  if (angle < 0.0) {
+    angle /= PI;
+    angle = pow(angle, 3.0);
+    angle *= PI;
+  }
+  
+  ceil_w = max(abs(angle) * 32.0, 0.0);
+  
+  float sub = 32.0 * (0.5 - light);
+  if (sub < -0.5) sub = -0.5;
+  
+  ceil_w += sub;
   
   float tr = pow(E, -cr * ceil_w);
   float tg = pow(E, -cg * ceil_w);
@@ -755,6 +809,43 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
   
   r -= 0.50 * rem;
   g -= 0.25 * rem;
+  
+  float in_sun = 0.0;
+  
+  float sun_angle = 2.0 * PI * time;
+  angle = atan2(ray.x, ray.y);
+  
+  vec2 sun = vec2(ray.z, signed_angle_dist(sun_angle, angle));
+  sun = rotate(sun, time * 8.0 * PI);
+  
+  if (abs(sun.x) + abs(sun.y) < 0.1) {
+    in_sun = 1.0;
+  }
+  
+  if (ray.y > 0.0 && in_cloud(ceil_x, ceil_z)) {
+    float cloud_force = 240.0 / sqrt(
+      pow(ray.x * ((240.0 - start.y) / ray.y), 2.0) +
+      pow(ray.z * ((240.0 - start.y) / ray.y), 2.0)
+    );
+    
+    cloud_force = max(min(cloud_force, 1.0), 0.0);
+    
+    r *= lerp(1.0, 1.1, cloud_force);
+    g *= lerp(1.0, 1.1, cloud_force);
+    b *= lerp(1.0, 1.1, cloud_force);
+    
+    float a = (r + g + b) / 3.0;
+    
+    r += a * 0.1 * cloud_force;
+    g += a * 0.1 * cloud_force;
+    b += a * 0.1 * cloud_force;
+    
+    in_sun *= lerp(1.0, 0.33, cloud_force);
+  }
+  
+  r = (r * (1.0 - in_sun)) + in_sun;
+  g = (g * (1.0 - in_sun)) + in_sun;
+  b = (b * (1.0 - in_sun)) + in_sun;
   
   if (r < 0.0) r = 0.0;
   if (g < 0.0) g = 0.0;

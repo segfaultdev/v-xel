@@ -394,7 +394,7 @@ int main(int argc, const char **argv) {
     single_spinlock = 0;
     
     if (strcmp(shader_path, "render_faster.fs")) {
-      float shader_time = vx_time;
+      float shader_time = fmodf(vx_time + (2.0f * 60.0f) / 1440.0f, 1.0f);
       SetShaderValue(shader, GetShaderLocation(shader, "time"), &shader_time, SHADER_UNIFORM_FLOAT);
     }
     

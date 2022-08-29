@@ -34,7 +34,14 @@ const int vx_tile_magenta_block = 23;
 const float PI = 3.14159265;
 const float E = 2.71828;
 
-const int vx_cloud_side = 512;
+layout(std430, binding=1) buffer config_data {
+  uint do_shadows;
+  uint do_occlusion;
+  uint do_borders;
+  uint do_reflections;
+  uint do_sky_decoration;
+  uint do_atmosphere;
+};
 
 layout(std430, binding=2) buffer client_data {
   float client_array[];
@@ -62,6 +69,8 @@ uniform int selected;
 uniform int vx_iterations;
 uniform int vx_total_side;
 uniform int vx_max_clients;
+
+uniform float vx_fov;
 
 out vec4 finalColor;
 
@@ -214,6 +223,7 @@ bool is_solid(uint x, uint y, uint z) {
 }
 
 float plot_shadow(vec3 start, vec3 ray) {
+  if (ray.y < 0.0) return 0.5;
   uvec3 position = uvec3(floor(start.x), floor(start.y), floor(start.z));
   
   vec3 side = vec3(0.0, 0.0, 0.0);
@@ -295,16 +305,15 @@ float plot_shadow(vec3 start, vec3 ray) {
     }
   }
   
+  if (do_sky_decoration == 0) return 1.0;
+  
   float ceil_w = (240.0 - start.y) / ray.y;
   
-  float ceil_x = mod((start.x + ray.x * ceil_w) + time * vx_cloud_side, vx_cloud_side);
-  while (ceil_x < 0.0) ceil_x += vx_cloud_side;
+  float ceil_x = (start.x + ray.x * ceil_w) + time * 512.0;
+  float ceil_z = (start.z + ray.z * ceil_w) - time * 512.0;
   
-  float ceil_z = mod((start.z + ray.z * ceil_w) - time * vx_cloud_side, vx_cloud_side);
-  while (ceil_z < 0.0) ceil_z += vx_cloud_side;
-  
-  if (ray.y >= 0.000001 && in_cloud(ceil_x, ceil_z)) {
-    return 0.75;
+  if (ray.y > 0.0 && in_cloud(ceil_x, ceil_z)) {
+    return 0.85;
   }
   
   return 1.0;
@@ -387,7 +396,7 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
       float border_dist = 1.0;
       float ambient_dist = 1.0;
       
-      if (hit_side == 0) {
+      if (do_borders > 0 && hit_side == 0) {
         if (get_tile(position.x, position.y - 1, position.z) != tile) {
           border_dist = min(border_dist, hit.y - floor(hit.y));
         }
@@ -407,7 +416,7 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
         if (get_tile(position.x - step.x, position.y, position.z) == tile) {
           border_dist = 1.0;
         }
-      } else if (hit_side == 1) {
+      } else if (do_borders > 0 && hit_side == 1) {
         if (get_tile(position.x - 1, position.y, position.z) != tile) {
           border_dist = min(border_dist, hit.x - floor(hit.x));
         }
@@ -427,7 +436,7 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
         if (get_tile(position.x, position.y - step.y, position.z) == tile) {
           border_dist = 1.0;
         }
-      } else if (hit_side == 2) {
+      } else if (do_borders > 0 && hit_side == 2) {
         if (get_tile(position.x - 1, position.y, position.z) != tile) {
           border_dist = min(border_dist, hit.x - floor(hit.x));
         }
@@ -449,7 +458,7 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
         }
       }
       
-      if (hit_side == 0) {
+      if (do_borders > 0 && hit_side == 0) {
         if (is_solid(position.x - step.x, position.y - 1, position.z)) {
           border_dist = min(border_dist, hit.y - floor(hit.y));
         }
@@ -465,7 +474,7 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
         if (is_solid(position.x - step.x, position.y, position.z + 1)) {
           border_dist = min(border_dist, 1.0 - (hit.z - floor(hit.z)));
         }
-      } else if (hit_side == 1) {
+      } else if (do_borders > 0 && hit_side == 1) {
         if (is_solid(position.x - 1, position.y - step.y, position.z)) {
           border_dist = min(border_dist, hit.x - floor(hit.x));
         }
@@ -481,7 +490,7 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
         if (is_solid(position.x, position.y - step.y, position.z + 1)) {
           border_dist = min(border_dist, 1.0 - (hit.z - floor(hit.z)));
         }
-      } else if (hit_side == 2) {
+      } else if (do_borders > 0 && hit_side == 2) {
         if (is_solid(position.x - 1, position.y, position.z - step.z)) {
           border_dist = min(border_dist, hit.x - floor(hit.x));
         }
@@ -502,13 +511,13 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
       float border_size = 2.0;
       if (tile == vx_tile_glass) border_size = 5.0;
       
-      if (border_dist < max((border_size / screen_size.x) * dist, border_size / 100.0)) {
+      if (border_dist < max((border_size / screen_size.x) * (dist * vx_fov), border_size / 100.0)) {
         border_dist = 0.75;
       } else {
         border_dist = 1.0;
       }
       
-      if (hit_side == 0) {
+      if (do_occlusion > 0 && hit_side == 0) {
         if (is_solid(position.x - step.x, position.y - 1, position.z)) {
           ambient_dist = min(ambient_dist, hit.y - floor(hit.y));
         }
@@ -540,7 +549,7 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
         if (is_solid(position.x - step.x, position.y + 1, position.z + 1)) {
           ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.y - floor(hit.y))) + square(1.0 - (hit.z - floor(hit.z)))));
         }
-      } else if (hit_side == 1) {
+      } else if (do_occlusion > 0 && hit_side == 1) {
         if (is_solid(position.x - 1, position.y - step.y, position.z)) {
           ambient_dist = min(ambient_dist, hit.x - floor(hit.x));
         }
@@ -572,7 +581,7 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
         if (is_solid(position.x + 1, position.y - step.y, position.z + 1)) {
           ambient_dist = min(ambient_dist, sqrt(square(1.0 - (hit.x - floor(hit.x))) + square(1.0 - (hit.z - floor(hit.z)))));
         }
-      } else if (hit_side == 2) {
+      } else if (do_occlusion > 0 && hit_side == 2) {
         if (is_solid(position.x - 1, position.y, position.z - step.z)) {
           ambient_dist = min(ambient_dist, hit.x - floor(hit.x));
         }
@@ -652,14 +661,17 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
       }
       
       color *= border_dist * ambient_dist;
-      color *= plot_shadow(pre_hit, vec3(cos(2 * PI * time), sin(2 * PI * time), 0.0));
+      
+      if (do_shadows > 0) {
+        color *= plot_shadow(pre_hit, vec3(cos(2 * PI * time), sin(2 * PI * time), 0.0));
+      }
       
       if (position == mouse_pos && hit_side == mouse_side) {
         color_left /= 2.0;
         final_color += vec3(1.0, 1.0, 1.0) * color_left;
       }
       
-      if (tile == vx_tile_water) {
+      if (do_reflections > 0 && tile == vx_tile_water) {
         vec3 new_start = pre_hit;
         
         float seconds = time * 1440.0;
@@ -746,13 +758,12 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
   }
   
   if (color_left <= 0.0) return vec4(final_color, depth);
+  if (do_atmosphere == 0) return vec4(final_color + vec3(0.5, 0.5, 1.0) * color_left, depth);
+  
   float ceil_w = (240.0 - start.y) / ray.y;
   
-  float ceil_x = mod((start.x + ray.x * ceil_w) + time * vx_cloud_side, vx_cloud_side);
-  while (ceil_x < 0.0) ceil_x += vx_cloud_side;
-  
-  float ceil_z = mod((start.z + ray.z * ceil_w) - time * vx_cloud_side, vx_cloud_side);
-  while (ceil_z < 0.0) ceil_z += vx_cloud_side;
+  float ceil_x = (start.x + ray.x * ceil_w) + time * 512.0;
+  float ceil_z = (start.z + ray.z * ceil_w) - time * 512.0;
   
   float light = cos(PI * (time + 0.25)) * cos(PI * (time + 0.25));
   float k = 800.0 * light;
@@ -763,16 +774,6 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
   float cr = k / 240100000000.0;
   float cg = k / 78904810000.0;
   float cb = k / 37480960000.0;
-  
-  float dist;
-  
-  if (hit_side == 0) {
-    dist = side.x - delta.x;
-  } else if (hit_side == 1) {
-    dist = side.y - delta.y;
-  } else if (hit_side == 2) {
-    dist = side.z - delta.z;
-  }
   
   float valid_x = ray.x;
   
@@ -816,57 +817,59 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
   r -= 0.50 * rem;
   g -= 0.25 * rem;
   
-  float in_sun = 0.0;
-  
-  float sun_angle = 2.0 * PI * time;
-  angle = atan2(ray.x, ray.y);
-  
-  vec2 sun = vec2(ray.z, signed_angle_dist(sun_angle, angle));
-  sun = rotate(sun, time * 8.0 * PI);
-  
-  if (abs(sun.x) + abs(sun.y) < 0.1) {
-    in_sun = 1.0;
-  }
-  
-  if (ray.y > 0.0 && in_cloud(ceil_x, ceil_z)) {
-    float cloud_force = 240.0 / sqrt(
-      pow(ray.x * ((240.0 - start.y) / ray.y), 2.0) +
-      pow(ray.z * ((240.0 - start.y) / ray.y), 2.0)
-    );
+  if (do_sky_decoration > 0) {
+    float in_sun = 0.0;
     
-    cloud_force = max(min(cloud_force, 1.0), 0.0);
+    float sun_angle = 2.0 * PI * time;
+    angle = atan2(ray.x, ray.y);
     
-    r *= lerp(1.0, 1.1, cloud_force);
-    g *= lerp(1.0, 1.1, cloud_force);
-    b *= lerp(1.0, 1.1, cloud_force);
+    vec2 sun = vec2(ray.z, signed_angle_dist(sun_angle, angle));
+    sun = rotate(sun, time * 8.0 * PI);
+    
+    if (abs(sun.x) + abs(sun.y) < 0.1) {
+      in_sun = 1.0;
+    }
+    
+    if (ray.y > 0.0 && in_cloud(ceil_x, ceil_z)) {
+      float cloud_force = 240.0 / sqrt(
+        pow(ray.x * ((240.0 - start.y) / ray.y), 2.0) +
+        pow(ray.z * ((240.0 - start.y) / ray.y), 2.0)
+      );
+      
+      cloud_force = max(min(cloud_force, 1.0), 0.0);
+      
+      r *= lerp(1.0, 1.1, cloud_force);
+      g *= lerp(1.0, 1.1, cloud_force);
+      b *= lerp(1.0, 1.1, cloud_force);
+      
+      float a = (r + g + b) / 3.0;
+      
+      r += a * 0.2 * cloud_force;
+      g += a * 0.2 * cloud_force;
+      b += a * 0.2 * cloud_force;
+      
+      in_sun *= lerp(1.0, 0.5, cloud_force);
+    }
+    
+    r = (r * (1.0 - in_sun)) + in_sun;
+    g = (g * (1.0 - in_sun)) + in_sun;
+    b = (b * (1.0 - in_sun)) + 0.85 * in_sun;
     
     float a = (r + g + b) / 3.0;
     
-    r += a * 0.2 * cloud_force;
-    g += a * 0.2 * cloud_force;
-    b += a * 0.2 * cloud_force;
-    
-    in_sun *= lerp(1.0, 0.5, cloud_force);
-  }
-  
-  r = (r * (1.0 - in_sun)) + in_sun;
-  g = (g * (1.0 - in_sun)) + in_sun;
-  b = (b * (1.0 - in_sun)) + 0.85 * in_sun;
-  
-  float a = (r + g + b) / 3.0;
-  
-  if (ray.y > 0 && a < 0.01) {
-    float star_force = 64.0 / sqrt(
-      pow(ray.x * ((240.0 - start.y) / ray.y), 2.0) +
-      pow(ray.z * ((240.0 - start.y) / ray.y), 2.0)
-    );
-    
-    star_force *= 1.0 - (a / 0.01);
-    
-    if (in_star(ceil_x, ceil_z)) {
-      r = (r * (1.0 - star_force)) + star_force;
-      g = (g * (1.0 - star_force)) + star_force;
-      b = (b * (1.0 - star_force)) + star_force;
+    if (ray.y > 0 && a < 0.01) {
+      float star_force = 16.0 / sqrt(
+        pow(ray.x * ((240.0 - start.y) / ray.y), 2.0) +
+        pow(ray.z * ((240.0 - start.y) / ray.y), 2.0)
+      );
+      
+      star_force *= 1.0 - (a / 0.01);
+      
+      if (in_star(ceil_x, ceil_z)) {
+        r = (r * (1.0 - star_force)) + star_force;
+        g = (g * (1.0 - star_force)) + star_force;
+        b = (b * (1.0 - star_force)) + star_force;
+      }
     }
   }
   
@@ -928,7 +931,7 @@ void main() {
     }
   }
   
-  vec2 coords = (gl_FragCoord.xy / screen_size.xy) * 2.0 - vec2(1.0, 1.0);
+  vec2 coords = ((gl_FragCoord.xy / screen_size.xy) * 2.0 - vec2(1.0, 1.0)) * vx_fov;
   float ratio_y = screen_size.y / screen_size.x;
   
   vec3 ray = vec3(coords.x, coords.y * ratio_y, 1.0);

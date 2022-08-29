@@ -12,7 +12,6 @@
 
 #define VX_WIDTH  288
 #define VX_HEIGHT 162
-#define VX_ZOOM   4
 
 #define SQUARE(x) ((x) * (x))
 
@@ -29,6 +28,23 @@ vx_client_t vx_player = (vx_client_t){
   .pos_z = 16384.0f,
 };
 
+vx_config_t vx_config = (vx_config_t){
+  .do_shadows = 1,
+  .do_occlusion = 1,
+  .do_borders = 1,
+  .do_reflections = 1,
+  .do_sky_decoration = 1,
+  .do_atmosphere = 1,
+};
+
+int vx_iterations = 320;
+int vx_zoom = 4;
+
+int vx_fov = 90;
+
+int vx_swap_mouse = 0;
+int vx_sensitivity = 30;
+
 float vx_time = 0.25f;
 
 float last_x = 0.0f;
@@ -41,8 +57,9 @@ int on_ground = 0;
 float angle_lr = 0;
 float angle_ud = 0;
 
-GLuint chunk_ssbo;
+GLuint config_ssbo;
 GLuint client_ssbo;
+GLuint chunk_ssbo;
 
 uint8_t sent[VX_TOTAL_SIDE * VX_TOTAL_SIDE];
 
@@ -51,6 +68,7 @@ int has_sent_angle = 0;
 int has_sent_camera = 0;
 int has_sent_clients = 0;
 int has_sent_selected = 0;
+int has_sent_config = 0;
 
 int single_spinlock = 0;
 
@@ -168,7 +186,7 @@ void check_jesus(float cam_x, float cam_y, float cam_z, float dir_x, float dir_y
     side_z = ((pos_z + 1) - cam_z) * delta_z;
   }
   
-  for (int i = 0; i < VX_ITER; i++) {
+  for (int i = 0; i < vx_iterations; i++) {
     if (side_x <= side_y && side_x <= side_z) {
       side_x += delta_x;
       pos_x += step_x;
@@ -229,7 +247,7 @@ int main(int argc, const char **argv) {
   strcpy(vx_name, argv[1]);
   
   SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-  InitWindow(VX_WIDTH * VX_ZOOM, VX_HEIGHT * VX_ZOOM, vx_name);
+  InitWindow(VX_WIDTH * vx_zoom, VX_HEIGHT * vx_zoom, vx_name);
   
   srand(time(0));
   
@@ -251,7 +269,6 @@ int main(int argc, const char **argv) {
   last_y = vx_player.pos_y;
   last_z = vx_player.pos_z;
   
-  int shader_vx_iterations = VX_ITER;
   int shader_vx_total_side = VX_TOTAL_SIDE;
   int shader_vx_max_clients = VX_MAX_CLIENTS;
   
@@ -261,15 +278,25 @@ int main(int argc, const char **argv) {
   
   int was_paused = 0;
   
-  SetShaderValue(shader, GetShaderLocation(shader, "vx_iterations"), &shader_vx_iterations, SHADER_UNIFORM_INT);
+  SetShaderValue(shader, GetShaderLocation(shader, "vx_iterations"), &vx_iterations, SHADER_UNIFORM_INT);
   SetShaderValue(shader, GetShaderLocation(shader, "vx_total_side"), &shader_vx_total_side, SHADER_UNIFORM_INT);
   SetShaderValue(shader, GetShaderLocation(shader, "vx_max_clients"), &shader_vx_max_clients, SHADER_UNIFORM_INT);
   
-  GLuint ssbos[2];
-  glGenBuffers(2, ssbos);
+  float shader_vx_fov = tanf((vx_fov * PI) / 360.0f);
+  SetShaderValue(shader, GetShaderLocation(shader, "vx_fov"), &shader_vx_fov, SHADER_UNIFORM_FLOAT);
   
-  client_ssbo = ssbos[0];
-  chunk_ssbo = ssbos[1];
+  GLuint ssbos[3];
+  glGenBuffers(3, ssbos);
+  
+  config_ssbo = ssbos[0];
+  client_ssbo = ssbos[1];
+  chunk_ssbo = ssbos[2];
+  
+  glBindBuffer(GL_SHADER_STORAGE_BUFFER, config_ssbo);
+  glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(vx_config_t), &vx_config, GL_DYNAMIC_DRAW);
+  glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, config_ssbo);
+  
+  has_sent_config = 1;
   
   glBindBuffer(GL_SHADER_STORAGE_BUFFER, client_ssbo);
   glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(float) * 3 * VX_MAX_CLIENTS, NULL, GL_DYNAMIC_DRAW);
@@ -295,6 +322,7 @@ int main(int argc, const char **argv) {
   int current_length = 0;
   
   float blank_start = GetTime();
+  int config_selected = 0;
   
   while (!WindowShouldClose()) {
     while (vx_player.pos_x < 0) vx_player.pos_x += 16777216.0f;
@@ -314,7 +342,8 @@ int main(int argc, const char **argv) {
     }
     
     if (!has_sent_size) {
-      float shader_screen_size[2] = {GetScreenWidth() / VX_ZOOM, GetScreenHeight() / VX_ZOOM};
+      float shader_screen_size[2] = {GetScreenWidth() / vx_zoom, GetScreenHeight() / vx_zoom};
+      
       SetShaderValue(shader, GetShaderLocation(shader, "screen_size"), shader_screen_size, SHADER_UNIFORM_VEC2);
       
       target = LoadRenderTexture(shader_screen_size[0], shader_screen_size[1]);
@@ -341,6 +370,19 @@ int main(int argc, const char **argv) {
     if (!has_sent_selected) {
       SetShaderValue(shader, GetShaderLocation(shader, "selected"), &selected, SHADER_UNIFORM_INT);
       has_sent_selected = 1;
+    }
+    
+    if (!has_sent_config) {
+      glBindBuffer(GL_SHADER_STORAGE_BUFFER, config_ssbo);
+      
+      glBufferSubData(
+        GL_SHADER_STORAGE_BUFFER,
+        0,
+        sizeof(vx_config_t),
+        &vx_config
+      );
+      
+      has_sent_config = 1;
     }
     
     for (int i = 0; i < VX_TOTAL_SIDE; i++) {
@@ -422,9 +464,9 @@ int main(int argc, const char **argv) {
       check_jesus(vx_player.pos_x, vx_player.pos_y + 0.5f, vx_player.pos_z, dir_x, dir_y, dir_z, mouse_pos, mouse_step, &mouse_side);
       
       if (mouse_side >= 0) {
-        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+        if (IsMouseButtonPressed(vx_swap_mouse ? MOUSE_BUTTON_LEFT : MOUSE_BUTTON_RIGHT)) {
           set_world(0, mouse_pos[0], mouse_pos[1], mouse_pos[2]);
-        } else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        } else if (IsMouseButtonPressed(vx_swap_mouse ? MOUSE_BUTTON_RIGHT : MOUSE_BUTTON_LEFT)) {
           int place_x = mouse_pos[0] - mouse_step[0];
           int place_y = mouse_pos[1] - mouse_step[1];
           int place_z = mouse_pos[2] - mouse_step[2];
@@ -475,7 +517,7 @@ int main(int argc, const char **argv) {
     
     DrawTexturePro(
       target.texture,
-      (Rectangle){0, 0, GetScreenWidth() / VX_ZOOM, -GetScreenHeight() / VX_ZOOM},
+      (Rectangle){0, 0, GetScreenWidth() / vx_zoom, -GetScreenHeight() / vx_zoom},
       (Rectangle){0, 0, GetScreenWidth(), GetScreenHeight()},
       (Vector2){0, 0},
       0.0f,
@@ -546,7 +588,7 @@ int main(int argc, const char **argv) {
       if (in_chat) {
         current_message[current_length] = '\0';
         
-        DrawRectangle(0, GetScreenHeight() - 24, GetScreenWidth() - 32 * VX_ZOOM, 24, (Color){0, 0, 0, 127});
+        DrawRectangle(0, GetScreenHeight() - 24, GetScreenWidth() - 32 * vx_zoom, 24, (Color){0, 0, 0, 127});
         DrawText(current_message, 2, GetScreenHeight() - 22, 20, WHITE);
         
         if ((int)((GetTime() - blank_start) * 3.0f) % 2 == 0) {
@@ -574,6 +616,136 @@ int main(int argc, const char **argv) {
         }
       } else {
         DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 127});
+        DrawText("Game paused (press Esc to resume, Up/Down to select and Space/Left/Right to change)", 10, 90, 20, WHITE);
+        
+        char buffer[100];
+        
+        sprintf(buffer, "%sShadows: %s", config_selected == 0 ? "> " : "", vx_config.do_shadows ? "Yes" : "No");
+        DrawText(buffer, 10, 110, 20, config_selected == 0 ? (Color){255, 255, 255, 255} : (Color){127, 127, 127, 255});
+        
+        if (config_selected == 0 && (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT))) {
+          vx_config.do_shadows = !vx_config.do_shadows;
+          has_sent_config = 0;
+        }
+        
+        sprintf(buffer, "%sAmbient occlusion: %s", config_selected == 1 ? "> " : "", vx_config.do_occlusion ? "Yes" : "No");
+        DrawText(buffer, 10, 130, 20, config_selected == 1 ? (Color){255, 255, 255, 255} : (Color){127, 127, 127, 255});
+        
+        if (config_selected == 1 && (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT))) {
+          vx_config.do_occlusion = !vx_config.do_occlusion;
+          has_sent_config = 0;
+        }
+        
+        sprintf(buffer, "%sBlock borders: %s", config_selected == 2 ? "> " : "", vx_config.do_borders ? "Yes" : "No");
+        DrawText(buffer, 10, 150, 20, config_selected == 2 ? (Color){255, 255, 255, 255} : (Color){127, 127, 127, 255});
+        
+        if (config_selected == 2 && (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT))) {
+          vx_config.do_borders = !vx_config.do_borders;
+          has_sent_config = 0;
+        }
+        
+        sprintf(buffer, "%sWater reflections: %s", config_selected == 3 ? "> " : "", vx_config.do_reflections ? "Yes" : "No");
+        DrawText(buffer, 10, 170, 20, config_selected == 3 ? (Color){255, 255, 255, 255} : (Color){127, 127, 127, 255});
+        
+        if (config_selected == 3 && (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT))) {
+          vx_config.do_reflections = !vx_config.do_reflections;
+          has_sent_config = 0;
+        }
+        
+        sprintf(buffer, "%sSky decoration (sun, clouds, stars): %s", config_selected == 4 ? "> " : "", vx_config.do_sky_decoration ? "Yes" : "No");
+        DrawText(buffer, 10, 190, 20, config_selected == 4 ? (Color){255, 255, 255, 255} : (Color){127, 127, 127, 255});
+        
+        if (config_selected == 4 && (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT))) {
+          vx_config.do_sky_decoration = !vx_config.do_sky_decoration;
+          has_sent_config = 0;
+        }
+        
+        sprintf(buffer, "%sAtmosphere: %s", config_selected == 5 ? "> " : "", vx_config.do_atmosphere ? "Yes" : "No");
+        DrawText(buffer, 10, 210, 20, config_selected == 5 ? (Color){255, 255, 255, 255} : (Color){127, 127, 127, 255});
+        
+        if (config_selected == 5 && (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT))) {
+          vx_config.do_atmosphere = !vx_config.do_atmosphere;
+          has_sent_config = 0;
+        }
+        
+        sprintf(buffer, "%sPixel size: %d", config_selected == 6 ? "> " : "", vx_zoom);
+        DrawText(buffer, 10, 230, 20, config_selected == 6 ? (Color){255, 255, 255, 255} : (Color){127, 127, 127, 255});
+        
+        if (config_selected == 6 && IsKeyPressed(KEY_LEFT)) {
+          if (vx_zoom > 1) {
+            vx_zoom--;
+            
+            UnloadRenderTexture(target);
+            has_sent_size = 0;
+          }
+        } else if (config_selected == 6 && IsKeyPressed(KEY_RIGHT)) {
+          if (vx_zoom < 32) {
+            vx_zoom++;
+            
+            UnloadRenderTexture(target);
+            has_sent_size = 0;
+          }
+        }
+        
+        sprintf(buffer, "%sRender distance: %d blocks", config_selected == 7 ? "> " : "", vx_iterations);
+        DrawText(buffer, 10, 250, 20, config_selected == 7 ? (Color){255, 255, 255, 255} : (Color){127, 127, 127, 255});
+        
+        if (config_selected == 7 && IsKeyPressed(KEY_LEFT)) {
+          if (vx_iterations > MIN(VX_CHUNK_X, VX_CHUNK_Z)) {
+            vx_iterations -= MIN(VX_CHUNK_X, VX_CHUNK_Z);
+            SetShaderValue(shader, GetShaderLocation(shader, "vx_iterations"), &vx_iterations, SHADER_UNIFORM_INT);
+          }
+        } else if (config_selected == 7 && IsKeyPressed(KEY_RIGHT)) {
+          if (vx_iterations < MIN(VX_CHUNK_X, VX_CHUNK_Z) * ((VX_TOTAL_SIDE / 2) - 1)) {
+            vx_iterations += MIN(VX_CHUNK_X, VX_CHUNK_Z);
+            SetShaderValue(shader, GetShaderLocation(shader, "vx_iterations"), &vx_iterations, SHADER_UNIFORM_INT);
+          }
+        }
+        
+        sprintf(buffer, "%sSwap left and right mouse buttons: %s", config_selected == 8 ? "> " : "", vx_swap_mouse ? "Yes" : "No");
+        DrawText(buffer, 10, 270, 20, config_selected == 8 ? (Color){255, 255, 255, 255} : (Color){127, 127, 127, 255});
+        
+        if (config_selected == 8 && (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT))) {
+          vx_swap_mouse = !vx_swap_mouse;
+        }
+        
+        sprintf(buffer, "%sMouse sensitivity: %d", config_selected == 9 ? "> " : "", vx_sensitivity);
+        DrawText(buffer, 10, 290, 20, config_selected == 9 ? (Color){255, 255, 255, 255} : (Color){127, 127, 127, 255});
+        
+        if (config_selected == 9 && IsKeyPressed(KEY_LEFT)) {
+          if (vx_sensitivity > 10) {
+            vx_sensitivity -= 5;
+          }
+        } else if (config_selected == 9 && IsKeyPressed(KEY_RIGHT)) {
+          if (vx_sensitivity < 60) {
+            vx_sensitivity += 5;
+          }
+        }
+        
+        sprintf(buffer, "%sField of view: %d", config_selected == 10 ? "> " : "", vx_fov);
+        DrawText(buffer, 10, 310, 20, config_selected == 10 ? (Color){255, 255, 255, 255} : (Color){127, 127, 127, 255});
+        
+        if (config_selected == 10 && IsKeyPressed(KEY_LEFT)) {
+          if (vx_fov > 10) {
+            vx_fov -= 10;
+            
+            float shader_vx_fov = tanf((vx_fov * PI) / 360.0f);
+            SetShaderValue(shader, GetShaderLocation(shader, "vx_fov"), &shader_vx_fov, SHADER_UNIFORM_FLOAT);
+          }
+        } else if (config_selected == 10 && IsKeyPressed(KEY_RIGHT)) {
+          if (vx_fov < 170) {
+            vx_fov += 10;
+            
+            float shader_vx_fov = tanf((vx_fov * PI) / 360.0f);
+            SetShaderValue(shader, GetShaderLocation(shader, "vx_fov"), &shader_vx_fov, SHADER_UNIFORM_FLOAT);
+          }
+        }
+        
+        if (IsKeyPressed(KEY_UP)) {
+          config_selected = (config_selected + 10) % 11;
+        } else if (IsKeyPressed(KEY_DOWN)) {
+          config_selected = (config_selected + 1) % 11;
+        }
       }
       
       was_paused = 1;
@@ -581,13 +753,13 @@ int main(int argc, const char **argv) {
       float mouse_delta_x = GetMouseDelta().x;
       float mouse_delta_y = GetMouseDelta().y;
       
-      if (!was_paused && fast_abs(mouse_delta_x) > 0.01f) {
-        angle_lr += mouse_delta_x * 0.0033f;
+      if (!was_paused && fast_abs(mouse_delta_x) > 0.005f) {
+        angle_lr += mouse_delta_x * vx_sensitivity * 0.0001f;
         has_sent_angle = 0;
       }
       
-      if (!was_paused && fast_abs(mouse_delta_y) > 0.01f) {
-        angle_ud += mouse_delta_y * 0.0033f;
+      if (!was_paused && fast_abs(mouse_delta_y) > 0.005f) {
+        angle_ud += mouse_delta_y * vx_sensitivity * 0.0001f;
         
         if (angle_ud < -PI / 2.0f) angle_ud = -PI / 2.0f;
         if (angle_ud > PI / 2.0f) angle_ud = PI / 2.0f;

@@ -105,8 +105,8 @@ static void *loader_function(void *cum) {
     
     int done = 0;
     
-    int max_dist = 1 + (VX_ITER / VX_CHUNK_X);
-    if (1 + (VX_ITER / VX_CHUNK_Z) > max_dist) max_dist = 1 + (VX_ITER / VX_CHUNK_Z);
+    int max_dist = 1 + (vx_iterations / VX_CHUNK_X);
+    if (1 + (vx_iterations / VX_CHUNK_Z) > max_dist) max_dist = 1 + (vx_iterations / VX_CHUNK_Z);
     
     for (int32_t dist = 0; dist <= max_dist; dist++) {
       for (int32_t dz = -dist; dz <= dist; dz++) {

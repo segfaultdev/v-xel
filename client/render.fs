@@ -125,6 +125,20 @@ bool in_leaves(float x, float z) {
   return (value * 0.25 < 0.3);
 }
 
+bool in_star(float x, float y) {
+  uvec2 mod = uvec2(floor(x * 0.8 + 1048576.0), floor(y * 0.8 + 1234567.0));
+  
+  uint mod_xy = mod.x ^ (mod.x << 4);
+  mod_xy ^= mod_xy >> 3;
+  mod_xy ^= mod.y << 1;
+  mod_xy ^= mod_xy << 13;
+  mod_xy ^= mod_xy >> 5;
+  mod_xy ^= mod.y << 6;
+  mod_xy ^= mod_xy >> 8;
+  
+  return (mod_xy >> 1) % 197 == 0;
+}
+
 uint get_tile(uint x, uint y, uint z) {
   if (y >= 128) return vx_tile_air;
   
@@ -281,10 +295,7 @@ float plot_shadow(vec3 start, vec3 ray) {
     }
   }
   
-  float old_y = ray.y;
-  
-  if (ray.y < 0.000001) ray.y = 0.000001;
-  float ceil_w = (160.0 - start.y) / ray.y;
+  float ceil_w = (240.0 - start.y) / ray.y;
   
   float ceil_x = mod((start.x + ray.x * ceil_w) + time * vx_cloud_side, vx_cloud_side);
   while (ceil_x < 0.0) ceil_x += vx_cloud_side;
@@ -292,10 +303,7 @@ float plot_shadow(vec3 start, vec3 ray) {
   float ceil_z = mod((start.z + ray.z * ceil_w) - time * vx_cloud_side, vx_cloud_side);
   while (ceil_z < 0.0) ceil_z += vx_cloud_side;
   
-  ceil_w = ((240.0 - start.y) / ray.y) / 100.0;
-  ceil_w = 32.0 / ceil_w;
-  
-  if (old_y >= 0.000001 && in_cloud(ceil_x, ceil_z)) {
+  if (ray.y >= 0.000001 && in_cloud(ceil_x, ceil_z)) {
     return 0.75;
   }
   
@@ -607,9 +615,7 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
       vec3 color = get_color(tile);
       vec3 pre_hit = hit;
       
-      if (hit_side == 0) pre_hit.x -= step.x * 0.001;
-      if (hit_side == 1) pre_hit.y -= step.y * 0.001;
-      if (hit_side == 2) pre_hit.z -= step.z * 0.001;
+      pre_hit -= ray * 0.001;
       
       vec3 hit_mod = hit - floor(hit);
       
@@ -836,16 +842,33 @@ vec4 plot_pixel(vec3 start, vec3 ray) {
     
     float a = (r + g + b) / 3.0;
     
-    r += a * 0.1 * cloud_force;
-    g += a * 0.1 * cloud_force;
-    b += a * 0.1 * cloud_force;
+    r += a * 0.2 * cloud_force;
+    g += a * 0.2 * cloud_force;
+    b += a * 0.2 * cloud_force;
     
-    in_sun *= lerp(1.0, 0.33, cloud_force);
+    in_sun *= lerp(1.0, 0.5, cloud_force);
   }
   
   r = (r * (1.0 - in_sun)) + in_sun;
   g = (g * (1.0 - in_sun)) + in_sun;
-  b = (b * (1.0 - in_sun)) + in_sun;
+  b = (b * (1.0 - in_sun)) + 0.85 * in_sun;
+  
+  float a = (r + g + b) / 3.0;
+  
+  if (ray.y > 0 && a < 0.01) {
+    float star_force = 64.0 / sqrt(
+      pow(ray.x * ((240.0 - start.y) / ray.y), 2.0) +
+      pow(ray.z * ((240.0 - start.y) / ray.y), 2.0)
+    );
+    
+    star_force *= 1.0 - (a / 0.01);
+    
+    if (in_star(ceil_x, ceil_z)) {
+      r = (r * (1.0 - star_force)) + star_force;
+      g = (g * (1.0 - star_force)) + star_force;
+      b = (b * (1.0 - star_force)) + star_force;
+    }
+  }
   
   if (r < 0.0) r = 0.0;
   if (g < 0.0) g = 0.0;
@@ -912,6 +935,9 @@ void main() {
   
   ray.zy = rotate(ray.zy, -angle_ud);
   ray.xz = rotate(ray.xz, -angle_lr);
+  
+  // float data = plot_shadow(camera + vec3(0.0, 0.5, 0.0), ray);
+  // vec4 plot_data = vec4(data, data, data, 1.0);
   
   vec4 plot_data = plot_pixel(camera + vec3(0.0, 0.5, 0.0), ray);
   
